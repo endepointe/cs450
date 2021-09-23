@@ -36,7 +36,7 @@
 
 // title of these windows:
 
-const char *WINDOWTITLE = { "OpenGL / GLUT Sample -- Joe Graphics" };
+const char *WINDOWTITLE = { "OpenGL / GLUT Sample -- Alvin Johns" };
 const char *GLUITITLE   = { "User Interface Window" };
 
 // what the glui package defines as true and false:
@@ -54,7 +54,7 @@ const int INIT_WINDOW_SIZE = { 600 };
 
 // size of the 3d box:
 
-const float BOXSIZE = { 2.f };
+const float BOXSIZE = { 1.5f };
 
 // multiplication factors for input interaction:
 //  (these are known from previous experience)
@@ -679,6 +679,7 @@ InitGraphics( )
 	// TimerFunc -- trigger something to happen a certain time from now
 	// IdleFunc -- what to do when nothing else is going on
 
+	// callbacks
 	glutSetWindow( MainWindow );
 	glutDisplayFunc( Display );
 	glutReshapeFunc( Resize );
@@ -736,7 +737,7 @@ InitLists( )
 
 		glBegin( GL_QUADS );
 
-			glColor3f( 0., 0., 1. );
+			glColor3f( .1, 0.2, .2 );
 				glVertex3f( -dx, -dy,  dz );
 				glVertex3f(  dx, -dy,  dz );
 				glVertex3f(  dx,  dy,  dz );
