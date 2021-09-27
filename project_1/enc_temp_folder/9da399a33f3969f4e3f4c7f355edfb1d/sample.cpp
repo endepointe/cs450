@@ -740,7 +740,6 @@ InitLists( )
 	// create the object:
 	SphereList = glGenLists(1);
 
-	// produces ugly but its a start
 	glNewList(SphereList, GL_COMPILE);
 		glBegin(GL_QUADS);
 			glColor3f( 1., 0., 0. );
