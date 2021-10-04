@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include <time.h>
 
 #define _USE_MATH_DEFINES
 #include <math.h>
@@ -54,7 +55,7 @@ const int INIT_WINDOW_SIZE = { 600 };
 
 // size of the 3d box:
 
-const float BOXSIZE = { .8f };
+const float BOXSIZE = {2.f };
 
 // multiplication factors for input interaction:
 //  (these are known from previous experience)
@@ -205,6 +206,7 @@ int		AxesOn;					// != 0 means to draw the axes
 GLuint	BoxList;				// object display list
 GLuint	MyObjectList;		// the thing I create
 GLuint	SphereList;			// OSU sphere
+GLuint	MyBarChart;			// bar chart
 
 int		DebugOn;				// != 0 means to print debugging info
 int		DepthCueOn;				// != 0 means to use intensity depth cueing
@@ -421,8 +423,10 @@ Display()
 	glEnable(GL_NORMALIZE);
 
 	// draw the current object:
+	// todo: create a GLuint array of objects at the top then init them in a loop here.
 	glCallList(BoxList);
 	glCallList(MyObjectList);
+	glCallList(MyBarChart);
 	glCallList(SphereList);
 
 #ifdef DEMO_Z_FIGHTING
@@ -767,7 +771,16 @@ InitLists()
 	float dy = BOXSIZE / 2.f;
 	float dz = BOXSIZE / 2.f;
 
-	/////////////////	
+	float data[50];
+	size_t data_len = sizeof(data) / sizeof(data[0]);
+	srand(time(NULL));
+	for (size_t i = 0; i < data_len; i++)
+	{
+		float x = (rand() % 50);
+		data[i] = x;
+	}
+
+	/*/////////////////	
 	// sphere globals:
 	float radius = 0.5;
 	NumLngs = 100;
@@ -820,7 +833,7 @@ InitLists()
 	bot.nx = 0.;		bot.ny = -1.;		bot.nz = 0.;
 	bot.s = 0.;		bot.t = 0.;
 	// end sphere globals
-	/////////////////////
+	/////////////////////*/
 	glutSetWindow(MainWindow);
 
 	// create the object:
@@ -828,11 +841,21 @@ InitLists()
 	BoxList = glGenLists(1);
 	MyObjectList = glGenLists(1);
 	SphereList = glGenLists(1);
+	MyBarChart = glGenLists(1);
 
+	glNewList(MyBarChart, GL_COMPILE);
+		glBegin(GL_LINE_STRIP);
+			glColor3f(1., 0.5, 1.);
+			for (size_t row = 0; row < data_len; row++)
+			{
+				glVertex3f(row, data[row], 0);
+			}
+		glEnd();
+	glEndList();
+
+	/*
 	glNewList(BoxList, GL_COMPILE);
-
     glBegin(GL_QUADS);
-
       glColor3f(0., 0., 1.);
       glVertex3f(-dx, -dy, dz);
       glVertex3f(dx, -dy, dz);
@@ -865,21 +888,21 @@ InitLists()
       glVertex3f(-dx, -dy, -dz);
       glVertex3f(dx, -dy, -dz);
       glVertex3f(dx, -dy, dz);
-
     glEnd();
-
 	glEndList();
+	*/
     
-  glNewList(MyObjectList, GL_COMPILE);
-    glBegin(GL_TRIANGLES);
-			glColor3f( 1., 1., 0. );
-      glVertex3f(0, 0, dz);
-      glVertex3f(0, 0, 3);
-      glVertex3f(0, 1, 3);
-		glEnd();
-  glEndList();
+  //glNewList(MyObjectList, GL_COMPILE);
+  //  glBegin(GL_TRIANGLES);
+		//	glColor3f( 1., 1., 0. );
+		//	for (size_t i = 0; i < data_len; i++)
+		//	{
+		//		glArrayElement(data[i]);
+		//	}
+		//glEnd();
+  //glEndList();
 
-	///////////////
+	/*///////////////
   // begin sphere
 	glNewList(SphereList, GL_COMPILE);
 		glBegin(GL_TRIANGLE_STRIP);
@@ -927,14 +950,14 @@ InitLists()
 	delete [] Pts;
 	Pts = NULL;
 	// end of sphere
-	////////////////
+	*/////////////////
 
 	// create the axes:
 
 	AxesList = glGenLists(1);
 	glNewList(AxesList, GL_COMPILE);
 	glLineWidth(AXES_WIDTH);
-	Axes(1.5);
+	Axes(50.);
 	glLineWidth(1.);
 	glEndList();
 }
