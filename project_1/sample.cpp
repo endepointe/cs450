@@ -771,12 +771,12 @@ InitLists()
 	float dy = BOXSIZE / 2.f;
 	float dz = BOXSIZE / 2.f;
 
-	float data[50];
+	float data[25];
 	size_t data_len = sizeof(data) / sizeof(data[0]);
 	srand(time(NULL));
 	for (size_t i = 0; i < data_len; i++)
 	{
-		float x = (rand() % 50);
+		float x = (rand() % 25);
 		data[i] = x;
 	}
 
@@ -844,13 +844,18 @@ InitLists()
 	MyBarChart = glGenLists(1);
 
 	glNewList(MyBarChart, GL_COMPILE);
-		glBegin(GL_LINE_STRIP);
-			glColor3f(1., 0.5, 1.);
-			for (size_t row = 0; row < data_len; row++)
-			{
-				glVertex3f(row, data[row], 0);
-			}
-		glEnd();
+		for (float i = 0.1; i < 10; i+=.01)
+		{ 
+      glBegin(GL_POLYGON);
+				glColor3ub(rand()%255,rand()%255,rand()%255);
+        glVertex3f(0, i, i);
+        for (size_t row = 1; row < data_len - 1; row++)
+        {
+					glVertex3f(row, data[row] - (i), i+row);
+        }
+        glVertex3f(24, 0, i+24);
+      glEnd();
+		}
 	glEndList();
 
 	/*
@@ -957,7 +962,7 @@ InitLists()
 	AxesList = glGenLists(1);
 	glNewList(AxesList, GL_COMPILE);
 	glLineWidth(AXES_WIDTH);
-	Axes(50.);
+	Axes(25.);
 	glLineWidth(1.);
 	glEndList();
 }
