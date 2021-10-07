@@ -848,7 +848,7 @@ InitLists()
 		{ 
       glBegin(GL_POLYGON);
 				glColor3ub(rand()%255,rand()%255,rand()%255);
-        glVertex3f(0, i, i);
+        glVertex3f(0, 0, i);
         for (size_t row = 1; row < data_len - 1; row++)
         {
 					glVertex3f(row, data[row] - (i), i+row);
