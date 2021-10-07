@@ -14,6 +14,7 @@
 #include <GL/gl.h>
 #include <GL/glu.h>
 #include "glut.h"
+#include "heli.550"
 
 
 //	This is a sample OpenGL / GLUT program
