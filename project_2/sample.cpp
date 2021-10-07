@@ -14,8 +14,10 @@
 #include <GL/gl.h>
 #include <GL/glu.h>
 #include "glut.h"
-#include "heli.550"
 
+#include "heli.550"
+#define BLADE_RADIUS					1.0
+#define BLADE_WIDTH						0.4
 
 //	This is a sample OpenGL / GLUT program
 //
@@ -51,7 +53,7 @@ const int ESCAPE = { 0x1b };
 
 // initial window size:
 
-const int INIT_WINDOW_SIZE = { 600 };
+const int INIT_WINDOW_SIZE = { 900 };
 
 // size of the 3d box:
 
@@ -169,6 +171,9 @@ int		ActiveButton;			// current button that is down
 GLuint	AxesList;				// list to hold the axes
 int		AxesOn;					// != 0 means to draw the axes
 GLuint	BoxList;				// object display list
+
+GLuint Helicopter; 
+
 int		DebugOn;				// != 0 means to print debugging info
 int		DepthCueOn;				// != 0 means to use intensity depth cueing
 int		DepthBufferOn;			// != 0 means to use the z-buffer
@@ -385,7 +390,8 @@ Display( )
 
 	// draw the current object:
 
-	glCallList( BoxList );
+	//glCallList( BoxList );
+	glCallList( Helicopter );
 
 #ifdef DEMO_Z_FIGHTING
 	if( DepthFightingOn != 0 )
@@ -401,7 +407,6 @@ Display( )
 
 	glDisable( GL_DEPTH_TEST );
 	glColor3f( 0., 1., 1. );
-	DoRasterString( 0., 1., 0., (char *)"Text That Moves" );
 
 	// draw some gratuitous text that is fixed on the screen:
 	//
@@ -420,7 +425,6 @@ Display( )
 	glMatrixMode( GL_MODELVIEW );
 	glLoadIdentity( );
 	glColor3f( 1., 1., 1. );
-	DoRasterString( 5., 5., 0., (char *)"Text That Doesn't" );
 
 	// swap the double-buffered framebuffers:
 
@@ -428,6 +432,7 @@ Display( )
 
 	// be sure the graphics buffer has been sent:
 	// note: be sure to use glFlush( ) here, not glFinish( ) !
+
 
 	glFlush( );
 }
@@ -725,54 +730,77 @@ InitGraphics( )
 void
 InitLists( )
 {
-	float dx = BOXSIZE / 2.f;
-	float dy = BOXSIZE / 2.f;
-	float dz = BOXSIZE / 2.f;
+
+	int i;
+	struct edge *ep;
+	struct point *p0, *p1, *p2;
+	struct tri *tp;
+	float p01[3], p02[3], n[3];
+
 	glutSetWindow( MainWindow );
 
 	// create the object:
+	Helicopter = glGenLists( 1 );
 
-	BoxList = glGenLists( 1 );
-	glNewList( BoxList, GL_COMPILE );
+	/* wireframe helicopter
+	glNewList( Helicopter, GL_COMPILE );
 
-		glBegin( GL_QUADS );
+		glColor3f(.0, .8, .1);
+    glPushMatrix();
+    glTranslatef(0., -1., 0.);
+    glRotatef(97., 0., 1., 0.);
+    glRotatef(-15., 0., 0., 1.);
+    glBegin(GL_LINES);
+		    for (i = 0, ep = Heliedges; i < Helinedges; i++, ep++)
+    {
+      p0 = &Helipoints[ep->p0];
+      p1 = &Helipoints[ep->p1];
+      glVertex3f(p0->x, p0->y, p0->z);
+      glVertex3f(p1->x, p1->y, p1->z);
+    }
+    glEnd();
+    glPopMatrix();
 
-			glColor3f( 0., 0., 1. );
-				glVertex3f( -dx, -dy,  dz );
-				glVertex3f(  dx, -dy,  dz );
-				glVertex3f(  dx,  dy,  dz );
-				glVertex3f( -dx,  dy,  dz );
+	glEndList();
+	//*/
+	///* polygon helicopter
+	glNewList( Helicopter, GL_COMPILE);
+		glColor3f(0.8, 0.2, 0.1);
+		glPushMatrix();
+		glTranslatef(0., -1., 0.);
+		glRotatef(97., 0., 1., 0.);
+		glRotatef(-15., 0., 0., 1.);
+		glBegin(GL_TRIANGLES);
+		for (i = 0, tp = Helitris; i < Helintris; i++, tp++)
+		{
+			p0 = &Helipoints[tp->p0];
+			p1 = &Helipoints[tp->p1];
+			p2 = &Helipoints[tp->p2];
 
-				glVertex3f( -dx, -dy, -dz );
-				glVertex3f( -dx,  dy, -dz );
-				glVertex3f(  dx,  dy, -dz );
-				glVertex3f(  dx, -dy, -dz );
+			// fake "lighting" from above:
 
-			glColor3f( 1., 0., 0. );
-				glVertex3f(  dx, -dy,  dz );
-				glVertex3f(  dx, -dy, -dz );
-				glVertex3f(  dx,  dy, -dz );
-				glVertex3f(  dx,  dy,  dz );
+			p01[0] = p1->x - p0->x;
+			p01[1] = p1->y - p0->y;
+			p01[2] = p1->z - p0->z;
+			p02[0] = p2->x - p0->x;
+			p02[1] = p2->y - p0->y;
+			p02[2] = p2->z - p0->z;
+			Cross(p01, p02, n);
+			Unit(n, n);
+			n[1] = (float)fabs(n[1]);
+			n[1] += .25;
+			if (n[1] > 1.)
+				n[1] = 1.;
+			glColor3f(0., n[1], 0.);
 
-				glVertex3f( -dx, -dy,  dz );
-				glVertex3f( -dx,  dy,  dz );
-				glVertex3f( -dx,  dy, -dz );
-				glVertex3f( -dx, -dy, -dz );
-
-			glColor3f( 0., 1., 0. );
-				glVertex3f( -dx,  dy,  dz );
-				glVertex3f(  dx,  dy,  dz );
-				glVertex3f(  dx,  dy, -dz );
-				glVertex3f( -dx,  dy, -dz );
-
-				glVertex3f( -dx, -dy,  dz );
-				glVertex3f( -dx, -dy, -dz );
-				glVertex3f(  dx, -dy, -dz );
-				glVertex3f(  dx, -dy,  dz );
-
-		glEnd( );
-
-	glEndList( );
+			glVertex3f(p0->x, p0->y, p0->z);
+			glVertex3f(p1->x, p1->y, p1->z);
+			glVertex3f(p2->x, p2->y, p2->z);
+		}
+		glEnd();
+		glPopMatrix();
+	glEndList();
+	//*/
 
 	// create the axes:
 
