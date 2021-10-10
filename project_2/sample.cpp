@@ -16,6 +16,7 @@
 #include "glut.h"
 
 #include "heli.550"
+
 #define BLADE_RADIUS					1.0
 #define BLADE_WIDTH						0.4
 
@@ -173,6 +174,7 @@ int		AxesOn;					// != 0 means to draw the axes
 GLuint	BoxList;				// object display list
 
 GLuint Helicopter; 
+GLuint HelicopterBlades;
 
 int		DebugOn;				// != 0 means to print debugging info
 int		DepthCueOn;				// != 0 means to use intensity depth cueing
@@ -181,6 +183,7 @@ int		DepthFightingOn;		// != 0 means to force the creation of z-fighting
 int		MainWindow;				// window id for main graphics window
 float	Scale;					// scaling factor
 float	Time;					// timer in the range [0.,1.)
+float TimeInterval;
 int		WhichColor;				// index into Colors[ ]
 int		WhichProjection;		// ORTHO or PERSP
 int		Xmouse, Ymouse;			// mouse values
@@ -279,8 +282,9 @@ Animate( )
 
 	const int MS_IN_THE_ANIMATION_CYCLE = 10000;	// milliseconds in the animation loop
 	int ms = glutGet(GLUT_ELAPSED_TIME);			// milliseconds since the program started
-	ms %= MS_IN_THE_ANIMATION_CYCLE;				// milliseconds in the range 0 to MS_IN_THE_ANIMATION_CYCLE-1
 	Time = (float)ms / (float)MS_IN_THE_ANIMATION_CYCLE;        // [ 0., 1. )
+	ms %= MS_IN_THE_ANIMATION_CYCLE;				// milliseconds in the range 0 to MS_IN_THE_ANIMATION_CYCLE-1
+	TimeInterval = (float)ms / (float)MS_IN_THE_ANIMATION_CYCLE;
 
 	// force a call to Display( ) next time it is convenient:
 
@@ -388,10 +392,30 @@ Display( )
 
 	glEnable( GL_NORMALIZE );
 
-	// draw the current object:
+	// draw the current objects:
 
-	//glCallList( BoxList );
 	glCallList( Helicopter );
+
+	glPushMatrix();
+	// draw blade 1
+	glTranslatef(0., 2.9, -2);
+	glScalef(5., 5., 5.);
+	glRotatef(360. * TimeInterval, 0., 1., 0.);
+	glRotatef(90., 1., 0., 0.);
+	glColor3f(1., 1., 1.);
+	glCallList(HelicopterBlades);
+	glPopMatrix();
+
+
+	glPushMatrix();
+	// draw blade 2
+	glTranslatef(.5, 2.5, 9.);
+	glScalef(1.5, 1.5, 1.5);
+	glRotatef(3 * 360. * TimeInterval, 1., 0., 0.);
+	glRotatef(90., 0., 1., 0.);
+	glCallList(HelicopterBlades);
+	glPopMatrix();
+
 
 #ifdef DEMO_Z_FIGHTING
 	if( DepthFightingOn != 0 )
@@ -741,6 +765,7 @@ InitLists( )
 
 	// create the object:
 	Helicopter = glGenLists( 1 );
+	HelicopterBlades = glGenLists( 1 );
 
 	/* wireframe helicopter
 	glNewList( Helicopter, GL_COMPILE );
@@ -802,6 +827,20 @@ InitLists( )
 	glEndList();
 	//*/
 
+	// Helicopter blades
+	glNewList(HelicopterBlades, GL_COMPILE);
+    glBegin(GL_TRIANGLES);
+			glColor3f(1., 1., 1.);
+      glVertex2f(BLADE_RADIUS, BLADE_WIDTH / 2.);
+      glVertex2f(0., 0.);
+      glVertex2f(BLADE_RADIUS, -BLADE_WIDTH / 2.);
+
+      glVertex2f(-BLADE_RADIUS, -BLADE_WIDTH / 2.);
+      glVertex2f(0., 0.);
+      glVertex2f(-BLADE_RADIUS, BLADE_WIDTH / 2.);
+    glEnd();
+	glEndList();
+	// 
 	// create the axes:
 
 	AxesList = glGenLists( 1 );
