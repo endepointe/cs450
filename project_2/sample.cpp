@@ -85,6 +85,40 @@ const int LEFT   = { 4 };
 const int MIDDLE = { 2 };
 const int RIGHT  = { 1 };
 
+/////////
+// SPHERE
+int		NumLngs, NumLats;
+struct spherepoint* Pts;
+
+struct spherepoint
+{
+	float x, y, z;		// coordinates
+	float nx, ny, nz;	// surface normal
+	float s, t;		// texture coords
+};
+
+inline
+struct spherepoint*
+	PtsPointer(int lat, int lng)
+{
+	if (lat < 0)	lat += (NumLats - 1);
+	if (lng < 0)	lng += (NumLngs - 0);
+	if (lat > NumLats - 1)	lat -= (NumLats - 1);
+	if (lng > NumLngs - 1)	lng -= (NumLngs - 0);
+	return &Pts[NumLngs * lat + lng];
+}
+
+inline
+void
+DrawPoint(struct spherepoint* p)
+{
+	glNormal3fv(&p->nx);
+	glTexCoord2fv(&p->s);
+	glVertex3fv(&p->x);
+}
+// END SPHERE 
+/////////////
+
 // which projection:
 
 enum Projections
@@ -93,6 +127,10 @@ enum Projections
 	PERSP
 };
 
+enum HelicopterPerspective {
+	Inside,
+	Outside
+};
 // which button:
 
 enum ButtonVals
@@ -175,6 +213,7 @@ GLuint	BoxList;				// object display list
 
 GLuint Helicopter; 
 GLuint HelicopterBlades;
+GLuint Sphere;
 
 int		DebugOn;				// != 0 means to print debugging info
 int		DepthCueOn;				// != 0 means to use intensity depth cueing
@@ -186,9 +225,10 @@ float	Time;					// timer in the range [0.,1.)
 float TimeInterval;
 int		WhichColor;				// index into Colors[ ]
 int		WhichProjection;		// ORTHO or PERSP
+int		ChosenHelicopterPerspective; // Inside or Outside
 int		Xmouse, Ymouse;			// mouse values
 float	Xrot, Yrot;				// rotation angles in degrees
-
+bool Frozen;
 
 // function prototypes:
 
@@ -280,7 +320,7 @@ Animate( )
 	// put animation stuff in here -- change some global variables
 	// for Display( ) to find:
 
-	const int MS_IN_THE_ANIMATION_CYCLE = 10000;	// milliseconds in the animation loop
+	#define  MS_IN_THE_ANIMATION_CYCLE  10000 // milliseconds in the animation loop
 	int ms = glutGet(GLUT_ELAPSED_TIME);			// milliseconds since the program started
 	Time = (float)ms / (float)MS_IN_THE_ANIMATION_CYCLE;        // [ 0., 1. )
 	ms %= MS_IN_THE_ANIMATION_CYCLE;				// milliseconds in the range 0 to MS_IN_THE_ANIMATION_CYCLE-1
@@ -349,19 +389,26 @@ Display( )
 	glLoadIdentity( );
 
 	// set the eye position, look-at position, and up-vector:
+	if (ChosenHelicopterPerspective == Inside)
+	{
+		gluLookAt(-0.4, 1.8, -4.9,     0., 0., -14.,     0., 1., 0. );
+	}
+	else 
+	{
+		gluLookAt( 0., 0., 3.,     0., 0., 0.,     0., 1., 0. );
 
-	gluLookAt( 0., 0., 3.,     0., 0., 0.,     0., 1., 0. );
+    // rotate the scene:
 
-	// rotate the scene:
+    glRotatef( (GLfloat)Yrot, 0., 1., 0. );
+    glRotatef( (GLfloat)Xrot, 1., 0., 0. );
 
-	glRotatef( (GLfloat)Yrot, 0., 1., 0. );
-	glRotatef( (GLfloat)Xrot, 1., 0., 0. );
+    // uniformly scale the scene:
 
-	// uniformly scale the scene:
-
-	if( Scale < MINSCALE )
-		Scale = MINSCALE;
-	glScalef( (GLfloat)Scale, (GLfloat)Scale, (GLfloat)Scale );
+    if( Scale < MINSCALE ) {
+      Scale = MINSCALE;
+		}
+    glScalef( (GLfloat)Scale, (GLfloat)Scale, (GLfloat)Scale );
+	}
 
 	// set the fog parameters:
 	// (this is really here to do intensity depth cueing)
@@ -395,8 +442,10 @@ Display( )
 	// draw the current objects:
 
 	glCallList( Helicopter );
+	glCallList( Sphere );
 
 	glPushMatrix();
+
 	// draw blade 1
 	glTranslatef(0., 2.9, -2);
 	glScalef(5., 5., 5.);
@@ -404,16 +453,17 @@ Display( )
 	glRotatef(90., 1., 0., 0.);
 	glColor3f(1., 1., 1.);
 	glCallList(HelicopterBlades);
+
 	glPopMatrix();
-
-
 	glPushMatrix();
+
 	// draw blade 2
 	glTranslatef(.5, 2.5, 9.);
 	glScalef(1.5, 1.5, 1.5);
 	glRotatef(3 * 360. * TimeInterval, 1., 0., 0.);
 	glRotatef(90., 0., 1., 0.);
 	glCallList(HelicopterBlades);
+
 	glPopMatrix();
 
 
@@ -554,6 +604,13 @@ DoProjectMenu( int id )
 	glutPostRedisplay( );
 }
 
+void 
+DoPerspectiveMenu(int id)
+{
+	ChosenHelicopterPerspective = id;
+	glutSetWindow(MainWindow);
+	glutPostRedisplay();
+}
 
 // use glut to display a string of characters using a raster font:
 
@@ -642,6 +699,10 @@ InitMenus( )
 	glutAddSubMenu(   "Axes",          axesmenu);
 	glutAddSubMenu(   "Colors",        colormenu);
 
+	int perspectmenu = glutCreateMenu(DoPerspectiveMenu);
+	glutAddMenuEntry("Outside", Outside);
+	glutAddMenuEntry("Inside", Inside);
+
 #ifdef DEMO_DEPTH_BUFFER
 	glutAddSubMenu(   "Depth Buffer",  depthbuffermenu);
 #endif
@@ -650,8 +711,11 @@ InitMenus( )
 	glutAddSubMenu(   "Depth Fighting",depthfightingmenu);
 #endif
 
+	glutCreateMenu(DoMainMenu);
+
 	glutAddSubMenu(   "Depth Cue",     depthcuemenu);
 	glutAddSubMenu(   "Projection",    projmenu );
+	glutAddSubMenu(		"View",					 perspectmenu);
 	glutAddMenuEntry( "Reset",         RESET );
 	glutAddSubMenu(   "Debug",         debugmenu);
 	glutAddMenuEntry( "Quit",          QUIT );
@@ -761,12 +825,104 @@ InitLists( )
 	struct tri *tp;
 	float p01[3], p02[3], n[3];
 
+	/////////////////
+	// sphere globals:
+	float radius = 0.5;
+	NumLngs = 100;
+	NumLats = 100;
+	if (NumLngs < 3)
+		NumLngs = 3;
+	if (NumLats < 3)
+		NumLats = 3;
+	// allocate the point data structure:
+	Pts = new struct spherepoint[NumLngs * NumLats];
+	// fill the Pts structure:
+	for (int ilat = 0; ilat < NumLats; ilat++)
+	{
+		float lat = -M_PI / 2. + M_PI * (float)ilat / (float)(NumLats - 1);
+		// ilat=0/lat=0. is the south pole
+		// ilat=NumLats-1, lat=+M_PI/2. is the north pole
+		float xz = cosf(lat);
+		float  y = sinf(lat);
+		for (int ilng = 0; ilng < NumLngs; ilng++)
+		// ilng=0, lng=-M_PI and
+		// ilng=NumLngs-1, lng=+M_PI are the same meridian
+		{
+			float lng = -M_PI + 2. * M_PI * (float)ilng / (float)(NumLngs - 1);
+			float x = xz * cosf(lng);
+			float z = -xz * sinf(lng);
+			struct spherepoint* p = PtsPointer(ilat, ilng);
+			p->x = radius * x;
+			p->y = radius * y;
+			p->z = (radius * z) -30;
+			p->nx = x;
+			p->ny = y;
+			p->nz = z - 30;
+			p->s = (lng + M_PI) / (2. * M_PI);
+			p->t = (lat + M_PI / 2.) / M_PI;
+		}
+	}
+	struct spherepoint top, bot;		// top, bottom points
+	top.x = 0.;		top.y = radius;	top.z = 0.;
+	top.nx = 0.;		top.ny = 1.;		top.nz = 0.;
+	top.s = 0.;		top.t = 1.;
+	bot.x = 0.;		bot.y = -radius;	bot.z = 0.;
+	bot.nx = 0.;		bot.ny = -1.;		bot.nz = 0.;
+	bot.s = 0.;		bot.t = 0.;
+	// end sphere globals
+	/////////////////////
 	glutSetWindow( MainWindow );
 
 	// create the object:
 	Helicopter = glGenLists( 1 );
 	HelicopterBlades = glGenLists( 1 );
-
+	Sphere = glGenLists( 1 );
+	///////////////
+  // begin sphere
+  glNewList(Sphere, GL_COMPILE);
+    glBegin(GL_TRIANGLE_STRIP);
+      // connect the north pole to the latitude NumLats-2:
+      for (int ilng = 0; ilng < NumLngs; ilng++)
+      {
+        float lng = -M_PI + 2. * M_PI * (float)ilng / (float)(NumLngs - 1);
+        top.s = (lng + M_PI) / (2. * M_PI);
+        DrawPoint(&top);
+        struct spherepoint* p = PtsPointer(NumLats - 2, ilng);
+        // ilat=NumLats-1 is the north pole
+        DrawPoint(p);
+      }
+    glEnd();
+    // connect the south pole to the latitude 1:
+    glBegin(GL_TRIANGLE_STRIP);
+      for (int ilng = NumLngs - 1; ilng >= 0; ilng--)
+      {
+        float lng = -M_PI + 2. * M_PI * (float)ilng / (float)(NumLngs - 1);
+        bot.s = (lng + M_PI) / (2. * M_PI);
+        DrawPoint(&bot);
+        struct spherepoint* p = PtsPointer(1, ilng);					// ilat=0 is the south pole
+        DrawPoint(p);
+      }
+    glEnd();
+    // connect the horizontal strips:
+    for (int ilat = 2; ilat < NumLats - 1; ilat++)
+    {
+      struct spherepoint* p;
+      glBegin(GL_TRIANGLE_STRIP);
+      for (int ilng = 0; ilng < NumLngs; ilng++)
+      {
+        p = PtsPointer(ilat, ilng);
+        DrawPoint(p);
+        p = PtsPointer(ilat - 1, ilng);
+        DrawPoint(p);
+      }
+      glEnd();
+    }
+  glEndList();
+  // sphere cleanup
+  delete [] Pts;
+  Pts = NULL;
+  // end of sphere
+  /////////////////
 	/* wireframe helicopter
 	glNewList( Helicopter, GL_COMPILE );
 
@@ -877,6 +1033,12 @@ Keyboard( unsigned char c, int x, int y )
 		case ESCAPE:
 			DoMainMenu( QUIT );	// will not return here
 			break;				// happy compiler
+		case 'f': 
+		case 'F':
+			Frozen = !Frozen;
+			if (Frozen) glutIdleFunc(NULL);
+			else glutIdleFunc(Animate);
+			break;
 
 		default:
 			fprintf( stderr, "Don't know what to do with keyboard hit: '%c' (0x%0x)\n", c, c );
