@@ -389,11 +389,7 @@ Display( )
 	glLoadIdentity( );
 
 	// set the eye position, look-at position, and up-vector:
-	if (ChosenHelicopterPerspective == Inside)
-	{
-		gluLookAt(-0.4, 1.8, -4.9,     0., 0., -14.,     0., 1., 0. );
-	}
-	else 
+	if (ChosenHelicopterPerspective == Outside)
 	{
 		gluLookAt( 0., 0., 3.,     0., 0., 0.,     0., 1., 0. );
 
@@ -408,6 +404,10 @@ Display( )
       Scale = MINSCALE;
 		}
     glScalef( (GLfloat)Scale, (GLfloat)Scale, (GLfloat)Scale );
+	}
+	else 
+	{
+		gluLookAt(-0.4, 1.8, -4.9,     0., 0., -14.,     0., 1., 0. );
 	}
 
 	// set the fog parameters:
@@ -447,7 +447,7 @@ Display( )
 	glPushMatrix();
 
 	// draw blade 1
-	glTranslatef(0., 2.9, -2);
+	glTranslatef(0., 2.9, -2); // position rear
 	glScalef(5., 5., 5.);
 	glRotatef(360. * TimeInterval, 0., 1., 0.);
 	glRotatef(90., 1., 0., 0.);
@@ -458,7 +458,7 @@ Display( )
 	glPushMatrix();
 
 	// draw blade 2
-	glTranslatef(.5, 2.5, 9.);
+	glTranslatef(.5, 2.5, 9.); // position top
 	glScalef(1.5, 1.5, 1.5);
 	glRotatef(3 * 360. * TimeInterval, 1., 0., 0.);
 	glRotatef(90., 0., 1., 0.);
