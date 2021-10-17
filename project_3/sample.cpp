@@ -32,7 +32,7 @@
 //		6. The transformations to be reset
 //		7. The program to quit
 //
-//	Author:			Joe Graphics
+//	Author: Alvin Johns
 
 // title of these windows:
 
@@ -97,6 +97,11 @@ enum ButtonVals
 	QUIT
 };
 
+enum DistortionTypes {
+	NoTexture,
+	NoDistortion,
+	Distortion
+};
 // window background color (rgba):
 
 const GLfloat BACKCOLOR[ ] = { 0., 0., 0., 1. };
@@ -155,6 +160,36 @@ const GLfloat FOGDENSITY  = { 0.30f };
 const GLfloat FOGSTART    = { 1.5 };
 const GLfloat FOGEND      = { 4. };
 
+int		NumLngs, NumLats;
+struct point* Pts;
+
+struct point
+{
+	float x, y, z;		// coordinates
+	float nx, ny, nz;	// surface normal
+	float s, t;		// texture coords
+};
+
+inline
+struct point*
+	PtsPointer(int lat, int lng)
+{
+	if (lat < 0)	lat += (NumLats - 1);
+	if (lng < 0)	lng += (NumLngs - 0);
+	if (lat > NumLats - 1)	lat -= (NumLats - 1);
+	if (lng > NumLngs - 1)	lng -= (NumLngs - 0);
+	return &Pts[NumLngs * lat + lng];
+}
+// Sphere params
+#define SPHERE_RADIUS	1
+#define SPHERE_SLICES 100
+#define	SPHERE_STACKS	100
+#define BMP_MAGIC_NUMBER	0x4d42
+#ifndef BI_RGB
+#define BI_RGB			0
+#define BI_RLE8			1
+#define BI_RLE4			2
+#endif
 
 // what options should we compile-in?
 // in general, you don't need to worry about these
@@ -167,7 +202,8 @@ const GLfloat FOGEND      = { 4. };
 int		ActiveButton;			// current button that is down
 GLuint	AxesList;				// list to hold the axes
 int		AxesOn;					// != 0 means to draw the axes
-GLuint	BoxList;				// object display list
+GLuint	texType;				// texture type 
+bool TurnTextureOn, TurnDistortionOn;
 int		DebugOn;				// != 0 means to print debugging info
 int		DepthCueOn;				// != 0 means to use intensity depth cueing
 int		DepthBufferOn;			// != 0 means to use the z-buffer
@@ -175,14 +211,13 @@ int		DepthFightingOn;		// != 0 means to force the creation of z-fighting
 int		MainWindow;				// window id for main graphics window
 float	Scale;					// scaling factor
 float	Time;					// timer in the range [0.,1.)
+float TimeInterval;
 int		WhichColor;				// index into Colors[ ]
 int		WhichProjection;		// ORTHO or PERSP
 int		Xmouse, Ymouse;			// mouse values
 float	Xrot, Yrot;				// rotation angles in degrees
 
-
 // function prototypes:
-
 void	Animate( );
 void	Display( );
 void	DoAxesMenu( int );
@@ -200,6 +235,7 @@ float	ElapsedSeconds( );
 void	InitGraphics( );
 void	InitLists( );
 void	InitMenus( );
+void	InitTextures();
 void	Keyboard( unsigned char, int, int );
 void	MouseButton( int, int, int, int );
 void	MouseMotion( int, int );
@@ -208,7 +244,6 @@ void	Resize( int, int );
 void	Visibility( int );
 
 void			Axes( float );
-unsigned char *	BmpToTexture( char *, int *, int * );
 void			HsvRgb( float[3], float [3] );
 int				ReadInt( FILE * );
 short			ReadShort( FILE * );
@@ -217,37 +252,35 @@ void			Cross(float[3], float[3], float[3]);
 float			Dot(float [3], float [3]);
 float			Unit(float [3], float [3]);
 
+unsigned char *BmpToTexture(char *file, int *width, int *height);
+void Sphere(float radius, int slices, int stacks);
 
 // main program:
 
 int
 main( int argc, char *argv[ ] )
-{
-	// turn on the glut package:
-	// (do this before checking argc and argv since it might
-	// pull some command line arguments out)
+{	
+	//checking argc and argv since it might
 
 	glutInit( &argc, argv );
 
 	// setup all the graphics stuff:
-
 	InitGraphics( );
 
-	// init all the global variables used by Display( ):
-
-	Reset( );
+	// get the textures
+	InitTextures();
 
 	// create the display structures that will not change:
-
 	InitLists( );
 
-	// setup all the user interface stuff:
+	// init all the global variables used by Display( ):
+	Reset( );
 
+	// setup all the user interface stuff:
 	InitMenus( );
 
 	// draw the scene once and wait for some interaction:
 	// (this will never return)
-
 	glutSetWindow( MainWindow );
 	glutMainLoop( );
 
@@ -382,9 +415,10 @@ Display( )
 
 	glEnable( GL_NORMALIZE );
 
-	// draw the current object:
-
-	glCallList( BoxList );
+	// draw sphere
+	glEnable(GL_TEXTURE_2D);
+	glBindTexture(GL_TEXTURE_2D, texType);
+	Sphere(SPHERE_RADIUS, SPHERE_SLICES, SPHERE_STACKS);
 
 #ifdef DEMO_Z_FIGHTING
 	if( DepthFightingOn != 0 )
@@ -396,14 +430,6 @@ Display( )
 	}
 #endif
 
-	// draw some gratuitous text that just rotates on top of the scene:
-
-	glDisable( GL_DEPTH_TEST );
-	glColor3f( 0., 1., 1. );
-	DoRasterString( 0., 1., 0., (char *)"Text That Moves" );
-
-	// draw some gratuitous text that is fixed on the screen:
-	//
 	// the projection matrix is reset to define a scene whose
 	// world coordinate system goes from 0-100 in each axis
 	//
@@ -419,7 +445,6 @@ Display( )
 	glMatrixMode( GL_MODELVIEW );
 	glLoadIdentity( );
 	glColor3f( 1., 1., 1. );
-	DoRasterString( 5., 5., 0., (char *)"Text That Doesn't" );
 
 	// swap the double-buffered framebuffers:
 
@@ -440,6 +465,13 @@ DoAxesMenu( int id )
 	glutPostRedisplay( );
 }
 
+void DoDistortionMenu(int id) {
+	TurnDistortionOn = (id == Distortion);
+	TurnTextureOn = (id != NoTexture);
+
+	glutSetWindow(MainWindow);
+	glutPostRedisplay();
+}
 
 void
 DoColorMenu( int id )
@@ -524,7 +556,6 @@ DoProjectMenu( int id )
 	glutPostRedisplay( );
 }
 
-
 // use glut to display a string of characters using a raster font:
 
 void
@@ -588,6 +619,11 @@ InitMenus( )
 	glutAddMenuEntry( "Off",  0 );
 	glutAddMenuEntry( "On",   1 );
 
+	int distortionmenu = glutCreateMenu(DoDistortionMenu);
+	glutAddMenuEntry("No texture", NoTexture);
+	glutAddMenuEntry("Texture without distortion", NoDistortion);
+	glutAddMenuEntry("Texture with distortion", Distortion);
+
 	int depthcuemenu = glutCreateMenu( DoDepthMenu );
 	glutAddMenuEntry( "Off",  0 );
 	glutAddMenuEntry( "On",   1 );
@@ -621,6 +657,7 @@ InitMenus( )
 #endif
 
 	glutAddSubMenu(   "Depth Cue",     depthcuemenu);
+	glutAddSubMenu(		"Distort",			 distortionmenu);
 	glutAddSubMenu(   "Projection",    projmenu );
 	glutAddMenuEntry( "Reset",         RESET );
 	glutAddSubMenu(   "Debug",         debugmenu);
@@ -631,7 +668,35 @@ InitMenus( )
 	glutAttachMenu( GLUT_RIGHT_BUTTON );
 }
 
+// import textures
+void InitTextures() {
+	int width, height, level, ncomps, border;
+	level = 0;
+	ncomps = 3;
+	border = 0;
 
+	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+
+
+	//glGenTextures(1, &texDay);
+	//glGenTextures(1, &texLight);
+	glGenTextures(1, &texType);
+
+	width = 1024;
+	height = 512;
+	unsigned char* Texture = BmpToTexture((char *)"worldtex.bmp", &width, &height);
+
+	glBindTexture(GL_TEXTURE_2D, texType);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+	glTexImage2D(GL_TEXTURE_2D, level, ncomps, width, height, border, GL_RGB, GL_UNSIGNED_BYTE, Texture);
+
+
+	glMatrixMode(GL_TEXTURE);
+}
 
 // initialize the glut and OpenGL libraries:
 //	also setup display lists and callback functions
@@ -724,57 +789,9 @@ InitGraphics( )
 void
 InitLists( )
 {
-	float dx = BOXSIZE / 2.f;
-	float dy = BOXSIZE / 2.f;
-	float dz = BOXSIZE / 2.f;
-	glutSetWindow( MainWindow );
-
-	// create the object:
-
-	BoxList = glGenLists( 1 );
-	glNewList( BoxList, GL_COMPILE );
-
-		glBegin( GL_QUADS );
-
-			glColor3f( 0., 0., 1. );
-				glVertex3f( -dx, -dy,  dz );
-				glVertex3f(  dx, -dy,  dz );
-				glVertex3f(  dx,  dy,  dz );
-				glVertex3f( -dx,  dy,  dz );
-
-				glVertex3f( -dx, -dy, -dz );
-				glVertex3f( -dx,  dy, -dz );
-				glVertex3f(  dx,  dy, -dz );
-				glVertex3f(  dx, -dy, -dz );
-
-			glColor3f( 1., 0., 0. );
-				glVertex3f(  dx, -dy,  dz );
-				glVertex3f(  dx, -dy, -dz );
-				glVertex3f(  dx,  dy, -dz );
-				glVertex3f(  dx,  dy,  dz );
-
-				glVertex3f( -dx, -dy,  dz );
-				glVertex3f( -dx,  dy,  dz );
-				glVertex3f( -dx,  dy, -dz );
-				glVertex3f( -dx, -dy, -dz );
-
-			glColor3f( 0., 1., 0. );
-				glVertex3f( -dx,  dy,  dz );
-				glVertex3f(  dx,  dy,  dz );
-				glVertex3f(  dx,  dy, -dz );
-				glVertex3f( -dx,  dy, -dz );
-
-				glVertex3f( -dx, -dy,  dz );
-				glVertex3f( -dx, -dy, -dz );
-				glVertex3f(  dx, -dy, -dz );
-				glVertex3f(  dx, -dy,  dz );
-
-		glEnd( );
-
-	glEndList( );
+	glutSetWindow(MainWindow);
 
 	// create the axes:
-
 	AxesList = glGenLists( 1 );
 	glNewList( AxesList, GL_COMPILE );
 		glLineWidth( AXES_WIDTH );
@@ -1130,180 +1147,177 @@ struct bmih
 } InfoHeader;
 
 // read a BMP file into a Texture:
-
-unsigned char *
-BmpToTexture( char *filename, int *width, int *height )
+unsigned char*
+BmpToTexture(char* filename, int* width, int* height)
 {
-	FILE *fp;
-#ifdef _WIN32
-        errno_t err = fopen_s( &fp, filename, "rb" );
-        if( err != 0 )
-        {
-		fprintf( stderr, "Cannot open Bmp file '%s'\n", filename );
-		return NULL;
-        }
-#else
-	FILE *fp = fopen( filename, "rb" );
-	if( fp == NULL )
+	FILE* fp = fopen(filename, "rb");
+	if (fp == NULL)
 	{
-		fprintf( stderr, "Cannot open Bmp file '%s'\n", filename );
+		fprintf(stderr, "Cannot open Bmp file '%s'\n", filename);
 		return NULL;
 	}
-#endif
 
-	FileHeader.bfType = ReadShort( fp );
+	FileHeader.bfType = ReadShort(fp);
+
 
 	// if bfType is not BMP_MAGIC_NUMBER, the file is not a bmp:
 
-	if( VERBOSE ) fprintf( stderr, "FileHeader.bfType = 0x%0x = \"%c%c\"\n",
-			FileHeader.bfType, FileHeader.bfType&0xff, (FileHeader.bfType>>8)&0xff );
-	if( FileHeader.bfType != BMP_MAGIC_NUMBER )
+	if (VERBOSE) fprintf(stderr, "FileHeader.bfType = 0x%0x = \"%c%c\"\n",
+		FileHeader.bfType, FileHeader.bfType & 0xff, (FileHeader.bfType >> 8) & 0xff);
+	if (FileHeader.bfType != BMP_MAGIC_NUMBER)
 	{
-		fprintf( stderr, "Wrong type of file: 0x%0x\n", FileHeader.bfType );
-		fclose( fp );
+		fprintf(stderr, "Wrong type of file: 0x%0x\n", FileHeader.bfType);
+		fclose(fp);
 		return NULL;
 	}
 
-	FileHeader.bfSize = ReadInt( fp );
-	if( VERBOSE )	fprintf( stderr, "FileHeader.bfSize = %d\n", FileHeader.bfSize );
 
-	FileHeader.bfReserved1 = ReadShort( fp );
-	FileHeader.bfReserved2 = ReadShort( fp );
+	FileHeader.bfSize = ReadInt(fp);
+	if (VERBOSE)	fprintf(stderr, "FileHeader.bfSize = %d\n", FileHeader.bfSize);
 
-	FileHeader.bfOffBytes = ReadInt( fp );
-	if( VERBOSE )	fprintf( stderr, "FileHeader.bfOffBytes = %d\n", FileHeader.bfOffBytes );
+	FileHeader.bfReserved1 = ReadShort(fp);
+	FileHeader.bfReserved2 = ReadShort(fp);
 
-	InfoHeader.biSize = ReadInt( fp );
-	if( VERBOSE )	fprintf( stderr, "InfoHeader.biSize = %d\n", InfoHeader.biSize );
-	InfoHeader.biWidth = ReadInt( fp );
-	if( VERBOSE )	fprintf( stderr, "InfoHeader.biWidth = %d\n", InfoHeader.biWidth );
-	InfoHeader.biHeight = ReadInt( fp );
-	if( VERBOSE )	fprintf( stderr, "InfoHeader.biHeight = %d\n", InfoHeader.biHeight );
+	FileHeader.bfOffBytes = ReadInt(fp);
+	if (VERBOSE)	fprintf(stderr, "FileHeader.bfOffBytes = %d\n", FileHeader.bfOffBytes);
+
+
+	InfoHeader.biSize = ReadInt(fp);
+	if (VERBOSE)	fprintf(stderr, "InfoHeader.biSize = %d\n", InfoHeader.biSize);
+	InfoHeader.biWidth = ReadInt(fp);
+	if (VERBOSE)	fprintf(stderr, "InfoHeader.biWidth = %d\n", InfoHeader.biWidth);
+	InfoHeader.biHeight = ReadInt(fp);
+	if (VERBOSE)	fprintf(stderr, "InfoHeader.biHeight = %d\n", InfoHeader.biHeight);
 
 	const int nums = InfoHeader.biWidth;
 	const int numt = InfoHeader.biHeight;
 
-	InfoHeader.biPlanes = ReadShort( fp );
-	if( VERBOSE )	fprintf( stderr, "InfoHeader.biPlanes = %d\n", InfoHeader.biPlanes );
+	InfoHeader.biPlanes = ReadShort(fp);
+	if (VERBOSE)	fprintf(stderr, "InfoHeader.biPlanes = %d\n", InfoHeader.biPlanes);
 
-	InfoHeader.biBitCount = ReadShort( fp );
-	if( VERBOSE )	fprintf( stderr, "InfoHeader.biBitCount = %d\n", InfoHeader.biBitCount );
+	InfoHeader.biBitCount = ReadShort(fp);
+	if (VERBOSE)	fprintf(stderr, "InfoHeader.biBitCount = %d\n", InfoHeader.biBitCount);
 
-	InfoHeader.biCompression = ReadInt( fp );
-	if( VERBOSE )	fprintf( stderr, "InfoHeader.biCompression = %d\n", InfoHeader.biCompression );
+	InfoHeader.biCompression = ReadInt(fp);
+	if (VERBOSE)	fprintf(stderr, "InfoHeader.biCompression = %d\n", InfoHeader.biCompression);
 
-	InfoHeader.biSizeImage = ReadInt( fp );
-	if( VERBOSE )	fprintf( stderr, "InfoHeader.biSizeImage = %d\n", InfoHeader.biSizeImage );
+	InfoHeader.biSizeImage = ReadInt(fp);
+	if (VERBOSE)	fprintf(stderr, "InfoHeader.biSizeImage = %d\n", InfoHeader.biSizeImage);
 
-	InfoHeader.biXPixelsPerMeter = ReadInt( fp );
-	InfoHeader.biYPixelsPerMeter = ReadInt( fp );
+	InfoHeader.biXPixelsPerMeter = ReadInt(fp);
+	InfoHeader.biYPixelsPerMeter = ReadInt(fp);
 
-	InfoHeader.biClrUsed = ReadInt( fp );
-	if( VERBOSE )	fprintf( stderr, "InfoHeader.biClrUsed = %d\n", InfoHeader.biClrUsed );
+	InfoHeader.biClrUsed = ReadInt(fp);
+	if (VERBOSE)	fprintf(stderr, "InfoHeader.biClrUsed = %d\n", InfoHeader.biClrUsed);
 
-	InfoHeader.biClrImportant = ReadInt( fp );
+	InfoHeader.biClrImportant = ReadInt(fp);
+
 
 	// fprintf( stderr, "Image size found: %d x %d\n", ImageWidth, ImageHeight );
 
+
 	// pixels will be stored bottom-to-top, left-to-right:
-	unsigned char *texture = new unsigned char[ 3 * nums * numt ];
-	if( texture == NULL )
+	unsigned char* texture = new unsigned char[3 * nums * numt];
+	if (texture == NULL)
 	{
-		fprintf( stderr, "Cannot allocate the texture array!\n" );
+		fprintf(stderr, "Cannot allocate the texture array!\n");
 		return NULL;
 	}
+
 
 	// extra padding bytes:
 
-	int requiredRowSizeInBytes = 4 * ( ( InfoHeader.biBitCount*InfoHeader.biWidth + 31 ) / 32 );
-	if( VERBOSE )	fprintf( stderr, "requiredRowSizeInBytes = %d\n", requiredRowSizeInBytes );
+	int requiredRowSizeInBytes = 4 * ((InfoHeader.biBitCount * InfoHeader.biWidth + 31) / 32);
+	if (VERBOSE)	fprintf(stderr, "requiredRowSizeInBytes = %d\n", requiredRowSizeInBytes);
 
-	int myRowSizeInBytes = ( InfoHeader.biBitCount*InfoHeader.biWidth + 7 ) / 8;
-	if( VERBOSE )	fprintf( stderr, "myRowSizeInBytes = %d\n", myRowSizeInBytes );
+	int myRowSizeInBytes = (InfoHeader.biBitCount * InfoHeader.biWidth + 7) / 8;
+	if (VERBOSE)	fprintf(stderr, "myRowSizeInBytes = %d\n", myRowSizeInBytes);
 
-	int oldNumExtra =  4*(( (3*InfoHeader.biWidth)+3)/4) - 3*InfoHeader.biWidth;
-	if( VERBOSE )	fprintf( stderr, "Old NumExtra padding = %d\n", oldNumExtra );
+	int oldNumExtra = 4 * (((3 * InfoHeader.biWidth) + 3) / 4) - 3 * InfoHeader.biWidth;
+	if (VERBOSE)	fprintf(stderr, "Old NumExtra padding = %d\n", oldNumExtra);
 
 	int numExtra = requiredRowSizeInBytes - myRowSizeInBytes;
-	if( VERBOSE )	fprintf( stderr, "New NumExtra padding = %d\n", numExtra );
+	if (VERBOSE)	fprintf(stderr, "New NumExtra padding = %d\n", numExtra);
+
 
 	// this function does not support compression:
 
-	if( InfoHeader.biCompression != 0 )
+	if (InfoHeader.biCompression != 0)
 	{
-		fprintf( stderr, "Wrong type of image compression: %d\n", InfoHeader.biCompression );
-		fclose( fp );
+		fprintf(stderr, "Wrong type of image compression: %d\n", InfoHeader.biCompression);
+		fclose(fp);
 		return NULL;
 	}
-	
+
+
 	// we can handle 24 bits of direct color:
-	if( InfoHeader.biBitCount == 24 )
+	if (InfoHeader.biBitCount == 24)
 	{
-		rewind( fp );
-		fseek( fp, FileHeader.bfOffBytes, SEEK_SET );
+		rewind(fp);
+		fseek(fp, FileHeader.bfOffBytes, SEEK_SET);
 		int t;
-		unsigned char *tp;
-		for( t = 0, tp = texture; t < numt; t++ )
+		unsigned char* tp;
+		for (t = 0, tp = texture; t < numt; t++)
 		{
-			for( int s = 0; s < nums; s++, tp += 3 )
+			for (int s = 0; s < nums; s++, tp += 3)
 			{
-				*(tp+2) = fgetc( fp );		// b
-				*(tp+1) = fgetc( fp );		// g
-				*(tp+0) = fgetc( fp );		// r
+				*(tp + 2) = fgetc(fp);		// b
+				*(tp + 1) = fgetc(fp);		// g
+				*(tp + 0) = fgetc(fp);		// r
 			}
 
-			for( int e = 0; e < numExtra; e++ )
+			for (int e = 0; e < numExtra; e++)
 			{
-				fgetc( fp );
+				fgetc(fp);
 			}
 		}
 	}
 
 	// we can also handle 8 bits of indirect color:
-	if( InfoHeader.biBitCount == 8 && InfoHeader.biClrUsed == 256 )
+	if (InfoHeader.biBitCount == 8 && InfoHeader.biClrUsed == 256)
 	{
 		struct rgba32
 		{
 			unsigned char r, g, b, a;
 		};
-		struct rgba32 *colorTable = new struct rgba32[ InfoHeader.biClrUsed ];
+		struct rgba32* colorTable = new struct rgba32[InfoHeader.biClrUsed];
 
-		rewind( fp );
-		fseek( fp, sizeof(struct bmfh) + InfoHeader.biSize - 2, SEEK_SET );
-		for( int c = 0; c < InfoHeader.biClrUsed; c++ )
+		rewind(fp);
+		fseek(fp, sizeof(struct bmfh) + InfoHeader.biSize - 2, SEEK_SET);
+		for (int c = 0; c < InfoHeader.biClrUsed; c++)
 		{
-			colorTable[c].r = fgetc( fp );
-			colorTable[c].g = fgetc( fp );
-			colorTable[c].b = fgetc( fp );
-			colorTable[c].a = fgetc( fp );
-			if( VERBOSE )	fprintf( stderr, "%4d:\t0x%02x\t0x%02x\t0x%02x\t0x%02x\n",
-				c, colorTable[c].r, colorTable[c].g, colorTable[c].b, colorTable[c].a );
+			colorTable[c].r = fgetc(fp);
+			colorTable[c].g = fgetc(fp);
+			colorTable[c].b = fgetc(fp);
+			colorTable[c].a = fgetc(fp);
+			if (VERBOSE)	fprintf(stderr, "%4d:\t0x%02x\t0x%02x\t0x%02x\t0x%02x\n",
+				c, colorTable[c].r, colorTable[c].g, colorTable[c].b, colorTable[c].a);
 		}
 
-		rewind( fp );
-		fseek( fp, FileHeader.bfOffBytes, SEEK_SET );
+		rewind(fp);
+		fseek(fp, FileHeader.bfOffBytes, SEEK_SET);
 		int t;
-		unsigned char *tp;
-		for( t = 0, tp = texture; t < numt; t++ )
+		unsigned char* tp;
+		for (t = 0, tp = texture; t < numt; t++)
 		{
-			for( int s = 0; s < nums; s++, tp += 3 )
+			for (int s = 0; s < nums; s++, tp += 3)
 			{
-				int index = fgetc( fp );
-				*(tp+0) = colorTable[index].r;	// r
-				*(tp+1) = colorTable[index].g;	// g
-				*(tp+2) = colorTable[index].b;	// b
+				int index = fgetc(fp);
+				*(tp + 0) = colorTable[index].r;	// r
+				*(tp + 1) = colorTable[index].g;	// g
+				*(tp + 2) = colorTable[index].b;	// b
 			}
 
-			for( int e = 0; e < numExtra; e++ )
+			for (int e = 0; e < numExtra; e++)
 			{
-				fgetc( fp );
+				fgetc(fp);
 			}
 		}
 
-		delete[ ] colorTable;
+		delete[] colorTable;
 	}
 
-	fclose( fp );
+	fclose(fp);
 
 	*width = nums;
 	*height = numt;
@@ -1441,4 +1455,113 @@ Unit(float vin[3], float vout[3])
 		vout[2] = vin[2];
 	}
 	return dist;
+}
+
+inline
+void
+DrawPoint(struct point* p)
+{
+	glNormal3fv(&p->nx);
+	glTexCoord2fv(&p->s);
+	glVertex3fv(&p->x);
+}
+
+void
+Sphere(float radius, int slices, int stacks)
+{
+	// set the globals:
+
+	NumLngs = SPHERE_SLICES;
+	NumLats = SPHERE_STACKS;
+	if (NumLngs < 3)
+		NumLngs = 3;
+	if (NumLats < 3)
+		NumLats = 3;
+
+	// allocate the point data structure:
+
+	Pts = new struct point[NumLngs * NumLats];
+
+	// fill the Pts structure:
+
+	for (int ilat = 0; ilat < NumLats; ilat++)
+	{
+		float lat = -M_PI / 2. + M_PI * (float)ilat / (float)(NumLats - 1);	// ilat=0/lat=0. is the south pole
+											// ilat=NumLats-1, lat=+M_PI/2. is the north pole
+		float xz = cosf(lat);
+		float  y = sinf(lat);
+		for (int ilng = 0; ilng < NumLngs; ilng++)				// ilng=0, lng=-M_PI and
+											// ilng=NumLngs-1, lng=+M_PI are the same meridian
+		{
+			float lng = -M_PI + 2. * M_PI * (float)ilng / (float)(NumLngs - 1);
+			float x = xz * cosf(lng);
+			float z = -xz * sinf(lng);
+			struct point* p = PtsPointer(ilat, ilng);
+			p->x = radius * x;
+			p->y = radius * y;
+			p->z = radius * z;
+			p->nx = x;
+			p->ny = y;
+			p->nz = z;
+			p->s = (lng + M_PI) / (2. * M_PI);
+			p->t = (lat + M_PI / 2.) / M_PI;
+		}
+	}
+
+	struct point top, bot;		// top, bottom points
+
+	top.x = 0.;		top.y = radius;	top.z = 0.;
+	top.nx = 0.;		top.ny = 1.;		top.nz = 0.;
+	top.s = 0.;		top.t = 1.;
+
+	bot.x = 0.;		bot.y = -radius;	bot.z = 0.;
+	bot.nx = 0.;		bot.ny = -1.;		bot.nz = 0.;
+	bot.s = 0.;		bot.t = 0.;
+
+	// connect the north pole to the latitude NumLats-2:
+
+	glBegin(GL_TRIANGLE_STRIP);
+	for (int ilng = 0; ilng < NumLngs; ilng++)
+	{
+		float lng = -M_PI + 2. * M_PI * (float)ilng / (float)(NumLngs - 1);
+		top.s = (lng + M_PI) / (2. * M_PI);
+		DrawPoint(&top);
+		struct point* p = PtsPointer(NumLats - 2, ilng);	// ilat=NumLats-1 is the north pole
+		DrawPoint(p);
+	}
+	glEnd();
+
+	// connect the south pole to the latitude 1:
+
+	glBegin(GL_TRIANGLE_STRIP);
+	for (int ilng = NumLngs - 1; ilng >= 0; ilng--)
+	{
+		float lng = -M_PI + 2. * M_PI * (float)ilng / (float)(NumLngs - 1);
+		bot.s = (lng + M_PI) / (2. * M_PI);
+		DrawPoint(&bot);
+		struct point* p = PtsPointer(1, ilng);					// ilat=0 is the south pole
+		DrawPoint(p);
+	}
+	glEnd();
+
+	// connect the horizontal strips:
+
+	for (int ilat = 2; ilat < NumLats - 1; ilat++)
+	{
+		struct point* p;
+		glBegin(GL_TRIANGLE_STRIP);
+		for (int ilng = 0; ilng < NumLngs; ilng++)
+		{
+			p = PtsPointer(ilat, ilng);
+			DrawPoint(p);
+			p = PtsPointer(ilat - 1, ilng);
+			DrawPoint(p);
+		}
+		glEnd();
+	}
+
+	// clean-up:
+
+	delete[] Pts;
+	Pts = NULL;
 }
