@@ -81,6 +81,8 @@ const int LEFT   = { 4 };
 const int MIDDLE = { 2 };
 const int RIGHT  = { 1 };
 
+const int MS_PER_CYCLE = 12340;
+
 // which projection:
 
 enum Projections
@@ -98,7 +100,6 @@ enum ButtonVals
 };
 
 enum DistortionTypes {
-	NoTexture,
 	NoDistortion,
 	Distortion
 };
@@ -203,7 +204,7 @@ int		ActiveButton;			// current button that is down
 GLuint	AxesList;				// list to hold the axes
 int		AxesOn;					// != 0 means to draw the axes
 GLuint	texType;				// texture type 
-bool TurnTextureOn, TurnDistortionOn;
+bool TurnDistortionOff, TurnDistortionOn;
 int		DebugOn;				// != 0 means to print debugging info
 int		DepthCueOn;				// != 0 means to use intensity depth cueing
 int		DepthBufferOn;			// != 0 means to use the z-buffer
@@ -308,6 +309,8 @@ Animate( )
 	int ms = glutGet(GLUT_ELAPSED_TIME);			// milliseconds since the program started
 	ms %= MS_IN_THE_ANIMATION_CYCLE;				// milliseconds in the range 0 to MS_IN_THE_ANIMATION_CYCLE-1
 	Time = (float)ms / (float)MS_IN_THE_ANIMATION_CYCLE;        // [ 0., 1. )
+	TimeInterval = (float)ms / (float)MS_PER_CYCLE;
+
 
 	// force a call to Display( ) next time it is convenient:
 
@@ -379,6 +382,8 @@ Display( )
 
 	glRotatef( (GLfloat)Yrot, 0., 1., 0. );
 	glRotatef( (GLfloat)Xrot, 1., 0., 0. );
+
+	glRotatef(360.*TimeInterval, 0., 1., 0.);
 
 	// uniformly scale the scene:
 
@@ -467,7 +472,7 @@ DoAxesMenu( int id )
 
 void DoDistortionMenu(int id) {
 	TurnDistortionOn = (id == Distortion);
-	TurnTextureOn = (id != NoTexture);
+	TurnDistortionOff = (id == NoDistortion);
 
 	glutSetWindow(MainWindow);
 	glutPostRedisplay();
@@ -620,7 +625,6 @@ InitMenus( )
 	glutAddMenuEntry( "On",   1 );
 
 	int distortionmenu = glutCreateMenu(DoDistortionMenu);
-	glutAddMenuEntry("No texture", NoTexture);
 	glutAddMenuEntry("Texture without distortion", NoDistortion);
 	glutAddMenuEntry("Texture with distortion", Distortion);
 
@@ -677,13 +681,11 @@ void InitTextures() {
 
 	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 
-
-	//glGenTextures(1, &texDay);
-	//glGenTextures(1, &texLight);
 	glGenTextures(1, &texType);
 
-	width = 1024;
-	height = 512;
+	//width = 1024;
+	//height = 512;
+	width = height = 500;
 	unsigned char* Texture = BmpToTexture((char *)"worldtex.bmp", &width, &height);
 
 	glBindTexture(GL_TEXTURE_2D, texType);
@@ -1503,8 +1505,17 @@ Sphere(float radius, int slices, int stacks)
 			p->nx = x;
 			p->ny = y;
 			p->nz = z;
-			p->s = (lng + M_PI) / (2. * M_PI);
-			p->t = (lat + M_PI / 2.) / M_PI;
+
+			if (TurnDistortionOn)
+			{
+				p->s = (lng+cosf(2*M_PI*(TimeInterval+(float)ilat/(float)NumLats))+M_PI/2.) / M_PI;
+				p->t = (lat+sinf(2*M_PI*(TimeInterval+(float)ilng/(float)NumLngs))+M_PI/2.) / M_PI;
+			} 
+			else 
+			{ 
+				p->s = (lng + M_PI) / (2. * M_PI);
+				p->t = (lat + M_PI / 2.) / M_PI;
+			}
 		}
 	}
 
