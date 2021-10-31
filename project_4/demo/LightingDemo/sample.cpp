@@ -313,7 +313,7 @@ Display( )
 	float theta = (float)(2. * M_PI) * Time;
 	glPushMatrix( );
 		SetPointLight( GL_LIGHT0,  (float)(RAD*cos(theta)), 0., (float)(RAD*sin(theta)),  1., 1., 1. );
-		glEnable( GL_LIGHT0 );
+		//glEnable( GL_LIGHT0 );
 		glDisable( GL_LIGHTING );
 		glColor3f( 1., 1., 1. );
 		glPushMatrix( );
@@ -617,9 +617,9 @@ Keyboard( unsigned char c, int x, int y )
 
 	switch( c )
 	{
-		case '0':
+		/*case '0':
 			Light0On = ! Light0On;
-			break;
+			break;*/
 
 		case '1':
 			Light1On = ! Light1On;
@@ -631,6 +631,7 @@ Keyboard( unsigned char c, int x, int y )
 
 		case 'f':
 		case 'F':
+		case '0':
 			Freeze = ! Freeze;
 			if( Freeze )
 				glutIdleFunc( NULL );
@@ -1097,5 +1098,3 @@ MulArray3( float factor, float array0[3] )
         array[3] = 1.;
         return array;
 }
-
-

@@ -15,19 +15,13 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="p4.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-  </ItemGroup>
-  <ItemGroup>
-    <Image Include="moon.bmp">
-      <Filter>Source Files</Filter>
-    </Image>
-    <Image Include="night_world.bmp">
-      <Filter>Source Files</Filter>
-    </Image>
     <Image Include="worldtex.bmp">
       <Filter>Source Files</Filter>
     </Image>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="sample.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

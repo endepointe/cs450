@@ -36,7 +36,7 @@
 
 // title of these windows:
 
-const char* WINDOWTITLE = { "OpenGL / Project 3 -- Alvin Johns" };
+const char* WINDOWTITLE = { "OpenGL / Project 4 -- Alvin Johns" };
 const char* GLUITITLE = { "User Interface Window" };
 
 // what the glui package defines as true and false:
@@ -54,7 +54,7 @@ const int INIT_WINDOW_SIZE = { 800 };
 
 // size of the 3d box:
 
-const float BOXSIZE = { 4.f };
+const float BOXSIZE = { 2.f };
 
 // multiplication factors for input interaction:
 //  (these are known from previous experience)
@@ -81,7 +81,7 @@ const int LEFT = { 4 };
 const int MIDDLE = { 2 };
 const int RIGHT = { 1 };
 
-const int MS_PER_CYCLE = 12340;
+const int MS_PER_CYCLE = {6000};
 
 // which projection:
 
@@ -205,6 +205,10 @@ GLuint	AxesList;				// list to hold the axes
 int		AxesOn;					// != 0 means to draw the axes
 GLuint	texType;				// texture type 
 bool TurnDistortionOff, TurnDistortionOn;
+bool Freeze;
+bool Light0On;
+bool Light1On; 
+bool Light2On;
 int		DebugOn;				// != 0 means to print debugging info
 int		DepthCueOn;				// != 0 means to use intensity depth cueing
 int		DepthBufferOn;			// != 0 means to use the z-buffer
@@ -217,6 +221,7 @@ int		WhichColor;				// index into Colors[ ]
 int		WhichProjection;		// ORTHO or PERSP
 int		Xmouse, Ymouse;			// mouse values
 float	Xrot, Yrot;				// rotation angles in degrees
+float White[3] = {1.,1.,1.};
 
 // function prototypes:
 void	Animate();
@@ -252,6 +257,15 @@ short			ReadShort(FILE*);
 void			Cross(float[3], float[3], float[3]);
 float			Dot(float[3], float[3]);
 float			Unit(float[3], float[3]);
+
+void	SetMaterial(float, float, float, float);
+void	SetPointLight(int, float, float, float, float, float, float);
+void	SetSpotLight(int, float, float, float, float, float, float, float, float, float);
+
+float* Array3(float, float, float);
+float* Array4(float, float, float, float);
+float* BlendArray3(float, float[3], float[3]);
+float* MulArray3(float, float[3]);
 
 unsigned char* BmpToTexture(char* file, int* width, int* height);
 void Sphere(float radius, int slices, int stacks, int xpos, int ypos, int zpos);
@@ -305,11 +319,10 @@ Animate()
 	// put animation stuff in here -- change some global variables
 	// for Display( ) to find:
 
-	const int MS_IN_THE_ANIMATION_CYCLE = 10000;	// milliseconds in the animation loop
 	int ms = glutGet(GLUT_ELAPSED_TIME);			// milliseconds since the program started
-	ms %= MS_IN_THE_ANIMATION_CYCLE;				// milliseconds in the range 0 to MS_IN_THE_ANIMATION_CYCLE-1
-	Time = (float)ms / (float)MS_IN_THE_ANIMATION_CYCLE;        // [ 0., 1. )
-	TimeInterval = (float)ms / (float)MS_PER_CYCLE;
+	ms %= MS_PER_CYCLE;				// milliseconds in the range 0 to MS_IN_THE_ANIMATION_CYCLE-1
+	Time = (float)ms / (float)MS_PER_CYCLE - 1;        // [ 0., 1. )
+	//TimeInterval = (float)ms / (float)MS_PER_CYCLE;
 
 
 	// force a call to Display( ) next time it is convenient:
@@ -346,7 +359,7 @@ Display()
 
 	// specify shading to be flat:
 
-	glShadeModel(GL_FLAT);
+	glShadeModel(GL_SMOOTH);
 
 	// set the viewport to a square centered in the window:
 
@@ -383,8 +396,6 @@ Display()
 	glRotatef((GLfloat)Yrot, 0., 1., 0.);
 	glRotatef((GLfloat)Xrot, 1., 0., 0.);
 
-	glRotatef(360. * TimeInterval, 0., 1., 0.);
-
 	// uniformly scale the scene:
 
 	if (Scale < MINSCALE)
@@ -416,50 +427,73 @@ Display()
 		glCallList(AxesList);
 	}
 
-	// since we are using glScalef( ), be sure normals get unitized:
-
 	glEnable(GL_NORMALIZE);
 
+	glLightModelfv(GL_LIGHT_MODEL_AMBIENT, MulArray3(.3f, White));
+	glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
+	glEnable(GL_LIGHTING);
+
+	// since we are using glScalef( ), be sure normals get unitized:
 	// draw sphere
 	glEnable(GL_TEXTURE_2D);
 	glBindTexture(GL_TEXTURE_2D, texType);
-	Sphere(SPHERE_RADIUS, SPHERE_SLICES, SPHERE_STACKS, 2, 0, 0);
-	Sphere(SPHERE_RADIUS, SPHERE_SLICES, SPHERE_STACKS, 0, 0, 2);
-	Sphere(SPHERE_RADIUS, SPHERE_SLICES, SPHERE_STACKS, 0, 0, 0);
 
-#ifdef DEMO_Z_FIGHTING
-	if (DepthFightingOn != 0)
-	{
-		glPushMatrix();
-		glRotatef(90., 0., 1., 0.);
-		glCallList(BoxList);
-		glPopMatrix();
-	}
-#endif
+#define RAD 20.f
+	// moving light source0
+	float theta = (float)(2. * M_PI) * Time;
+	glPushMatrix();
+	SetPointLight(GL_LIGHT0, (float)(RAD * cos(theta)), 0., (float)(RAD * sin(theta)), 1., 1., 1.);
 
-	// the projection matrix is reset to define a scene whose
-	// world coordinate system goes from 0-100 in each axis
-	//
-	// this is called "percent units", and is just a convenience
-	//
-	// the modelview matrix is reset to identity as we don't
-	// want to transform these coordinates
-
-	glDisable(GL_DEPTH_TEST);
-	glMatrixMode(GL_PROJECTION);
-	glLoadIdentity();
-	gluOrtho2D(0., 100., 0., 100.);
-	glMatrixMode(GL_MODELVIEW);
-	glLoadIdentity();
+	glDisable(GL_LIGHTING);
 	glColor3f(1., 1., 1.);
+	glPushMatrix();
+	glTranslatef((float)(RAD * cos(theta)), 0., (float)(RAD * sin(theta)));
+	glutSolidSphere(.3, 10, 10);
+	glPopMatrix();
+
+	glPushMatrix();
+	glTranslatef(0., 0.5, -2.5);
+	glColor3f(0.7, 0.9, 0.1);
+	glutSolidSphere(0.05, 50, 50);
+	SetSpotLight(GL_LIGHT1, 0., 0.5, -2.5, 0., -0.3, 1.5, .7, .9, .1);
+	glPopMatrix();
+
+	glPushMatrix();
+	glTranslatef(1., 0., 1.);
+	glColor3f(0.9, 0.1, 0.1);
+	glutSolidSphere(0.05, 50, 50);
+	SetSpotLight(GL_LIGHT2, 1., 0., 1., -1., 0., -1., .9, .1, .1);
+	glPopMatrix();
+
+	(Light0On) ? glEnable(GL_LIGHT0) : glDisable(GL_LIGHT0);
+	(Light1On) ? glEnable(GL_LIGHT1) : glDisable(GL_LIGHT1);
+	(Light2On) ? glEnable(GL_LIGHT2) : glDisable(GL_LIGHT2);
+
+	glEnable(GL_LIGHTING);
+	glPopMatrix();
+
+	glPushMatrix();
+	// shiny
+	SetMaterial(1.f, 1.f, 1.f, 1.f);
+	glTranslatef(0., 0., 0.);
+	glShadeModel(GL_FLAT);
+	//glutSolidTorus(.2, .7, 10, 10);
+	Sphere(0.3, SPHERE_SLICES, SPHERE_STACKS, 0, 0, 0);
+	Sphere(SPHERE_RADIUS, SPHERE_SLICES, SPHERE_STACKS, -2, -2, 0);
+	glShadeModel(GL_SMOOTH);
+	glutSolidTorus(12., 19., 10, 10);
+	glPopMatrix();
+	// dull
+	SetMaterial(1.f, 1.f, 1.f, 96.f);
+	Sphere(SPHERE_RADIUS, SPHERE_SLICES, SPHERE_STACKS, 0, 3, -5);
+	glTranslatef(3. * sin(Time), 2, 2.9 * cos(Time));
+	Sphere(SPHERE_RADIUS, SPHERE_SLICES, SPHERE_STACKS, 2, 0, 2);
+	glPopMatrix();
+
+	glDisable(GL_LIGHTING);
 
 	// swap the double-buffered framebuffers:
-
 	glutSwapBuffers();
-
-	// be sure the graphics buffer has been sent:
-	// note: be sure to use glFlush( ) here, not glFinish( ) !
-
 	glFlush();
 }
 
@@ -514,6 +548,7 @@ DoDepthFightingMenu(int id)
 	glutSetWindow(MainWindow);
 	glutPostRedisplay();
 }
+
 
 
 void
@@ -671,6 +706,7 @@ InitMenus()
 
 	// attach the pop-up menu to the right mouse button:
 
+
 	glutAttachMenu(GLUT_RIGHT_BUTTON);
 }
 
@@ -685,9 +721,7 @@ void InitTextures() {
 
 	glGenTextures(1, &texType);
 
-	//width = 1024;
-	//height = 512;
-	width = height = 500;
+	width = height = 200;
 	unsigned char* Texture = BmpToTexture((char*)"worldtex.bmp", &width, &height);
 
 	glBindTexture(GL_TEXTURE_2D, texType);
@@ -697,7 +731,6 @@ void InitTextures() {
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
 	glTexImage2D(GL_TEXTURE_2D, level, ncomps, width, height, border, GL_RGB, GL_UNSIGNED_BYTE, Texture);
-
 
 	glMatrixMode(GL_TEXTURE);
 }
@@ -768,7 +801,7 @@ InitGraphics()
 	glutTabletButtonFunc(NULL);
 	glutMenuStateFunc(NULL);
 	glutTimerFunc(-1, NULL, 0);
-	glutIdleFunc(NULL);
+	glutIdleFunc(Animate);
 
 	// init glew (a window must be open to do this):
 
@@ -815,24 +848,39 @@ Keyboard(unsigned char c, int x, int y)
 
 	switch (c)
 	{
-	case 'o':
-	case 'O':
-		WhichProjection = ORTHO;
-		break;
+    case '0':
+      Light0On = !Light0On;
+      break;
+    case '1':
+      Light1On = !Light1On;
+      break;
+    case '2':
+      Light2On = !Light2On;
+      break;
+    case 'f': case 'F':
+      Freeze = !Freeze;
+      if (Freeze) glutIdleFunc(NULL);
+      else glutIdleFunc(Animate);
+      break;
 
-	case 'p':
-	case 'P':
-		WhichProjection = PERSP;
-		break;
+    case 'o':
+    case 'O':
+      WhichProjection = ORTHO;
+      break;
 
-	case 'q':
-	case 'Q':
-	case ESCAPE:
-		DoMainMenu(QUIT);	// will not return here
-		break;				// happy compiler
+    case 'p':
+    case 'P':
+      WhichProjection = PERSP;
+      break;
 
-	default:
-		fprintf(stderr, "Don't know what to do with keyboard hit: '%c' (0x%0x)\n", c, c);
+    case 'q':
+    case 'Q':
+    case ESCAPE:
+      DoMainMenu(QUIT);	// will not return here
+      break;				// happy compiler
+
+    default:
+      fprintf(stderr, "Don't know what to do with keyboard hit: '%c' (0x%0x)\n", c, c);
 	}
 
 	// force a call to Display( ):
@@ -955,6 +1003,8 @@ Reset()
 	WhichColor = WHITE;
 	WhichProjection = PERSP;
 	Xrot = Yrot = 0.;
+	Light0On = 1; Light1On = 1; Light2On = 1;
+	Freeze = 0;
 }
 
 
@@ -1461,6 +1511,100 @@ Unit(float vin[3], float vout[3])
 	return dist;
 }
 
+void
+SetMaterial(float r, float g, float b, float shininess)
+{
+	glMaterialfv(GL_BACK, GL_EMISSION, Array3(0., 0., 0.));
+	glMaterialfv(GL_BACK, GL_AMBIENT, MulArray3(.4f, White));
+	glMaterialfv(GL_BACK, GL_DIFFUSE, MulArray3(1., White));
+	glMaterialfv(GL_BACK, GL_SPECULAR, Array3(0., 0., 0.));
+	glMaterialf(GL_BACK, GL_SHININESS, 5.f);
+
+	glMaterialfv(GL_FRONT, GL_EMISSION, Array3(0., 0., 0.));
+	glMaterialfv(GL_FRONT, GL_AMBIENT, Array3(r, g, b));
+	glMaterialfv(GL_FRONT, GL_DIFFUSE, Array3(r, g, b));
+	glMaterialfv(GL_FRONT, GL_SPECULAR, MulArray3(.8f, White));
+	glMaterialf(GL_FRONT, GL_SHININESS, shininess);
+}
+
+
+void
+SetPointLight(int ilight, float x, float y, float z, float r, float g, float b)
+{
+	glLightfv(ilight, GL_POSITION, Array3(x, y, z));
+	glLightfv(ilight, GL_AMBIENT, Array3(0., 0., 0.));
+	glLightfv(ilight, GL_DIFFUSE, Array3(r, g, b));
+	glLightfv(ilight, GL_SPECULAR, Array3(r, g, b));
+	glLightf(ilight, GL_CONSTANT_ATTENUATION, 1.);
+	glLightf(ilight, GL_LINEAR_ATTENUATION, 0.);
+	glLightf(ilight, GL_QUADRATIC_ATTENUATION, 0.);
+	glEnable(ilight);
+}
+
+void
+SetSpotLight(int ilight, float x, float y, float z, float xdir, float ydir, float zdir, float r, float g, float b)
+{
+	glLightfv(ilight, GL_POSITION, Array3(x, y, z));
+	glLightfv(ilight, GL_SPOT_DIRECTION, Array3(xdir, ydir, zdir));
+	glLightf(ilight, GL_SPOT_EXPONENT, 1.);
+	glLightf(ilight, GL_SPOT_CUTOFF, 45.);
+	glLightfv(ilight, GL_AMBIENT, Array3(0., 0., 0.));
+	glLightfv(ilight, GL_DIFFUSE, Array3(r, g, b));
+	glLightfv(ilight, GL_SPECULAR, Array3(r, g, b));
+	glLightf(ilight, GL_CONSTANT_ATTENUATION, 1.);
+	glLightf(ilight, GL_LINEAR_ATTENUATION, 0.);
+	glLightf(ilight, GL_QUADRATIC_ATTENUATION, 0.);
+	glEnable(ilight);
+}
+
+float*
+Array3(float a, float b, float c)
+{
+	static float array[4];
+
+	array[0] = a;
+	array[1] = b;
+	array[2] = c;
+	array[3] = 1.;
+	return array;
+}
+
+float*
+Array4(float a, float b, float c, float d)
+{
+	static float array[4];
+
+	array[0] = a;
+	array[1] = b;
+	array[2] = c;
+	array[3] = d;
+	return array;
+}
+
+float*
+BlendArray3(float factor, float array0[3], float array1[3])
+{
+	static float array[4];
+
+	array[0] = factor * array0[0] + (1.f - factor) * array1[0];
+	array[1] = factor * array0[1] + (1.f - factor) * array1[1];
+	array[2] = factor * array0[2] + (1.f - factor) * array1[2];
+	array[3] = 1.;
+	return array;
+}
+
+float*
+MulArray3(float factor, float array0[3])
+{
+	static float array[4];
+
+	array[0] = factor * array0[0];
+	array[1] = factor * array0[1];
+	array[2] = factor * array0[2];
+	array[3] = 1.;
+	return array;
+}
+
 inline
 void
 DrawPoint(struct point* p)
@@ -1493,7 +1637,7 @@ Sphere(float radius, int slices, int stacks, int xpos, int ypos, int zpos)
 		float lat = -M_PI / 2. + M_PI * (float)ilat / (float)(NumLats - 1);	// ilat=0/lat=0. is the south pole
 											// ilat=NumLats-1, lat=+M_PI/2. is the north pole
 		float xz = cosf(lat);
-		float  y = sinf(lat);
+		float  y = sinf(lat) + ypos;
 		for (int ilng = 0; ilng < NumLngs; ilng++)				// ilng=0, lng=-M_PI and
 											// ilng=NumLngs-1, lng=+M_PI are the same meridian
 		{
@@ -1523,11 +1667,11 @@ Sphere(float radius, int slices, int stacks, int xpos, int ypos, int zpos)
 
 	struct point top, bot;		// top, bottom points
 
-	top.x = (float)xpos;		top.y = radius;	top.z = (float)zpos;
+	top.x = (float)xpos;		top.y = radius + (float)ypos;	top.z = (float)zpos;
 	top.nx = 0.;		top.ny = 1.;		top.nz = 0.;
 	top.s = 0.;		top.t = 1.;
 
-	bot.x = (float)xpos;		bot.y = -radius;	bot.z = (float)zpos;
+	bot.x = (float)xpos;		bot.y = -radius + (float)ypos;	bot.z = (float)zpos;
 	bot.nx = 0.;		bot.ny = -1.;		bot.nz = 0.;
 	bot.s = 0.;		bot.t = 0.;
 

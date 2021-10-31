@@ -125,12 +125,10 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="p4.cpp" />
+    <Image Include="worldtex.bmp" />
   </ItemGroup>
   <ItemGroup>
-    <Image Include="moon.bmp" />
-    <Image Include="night_world.bmp" />
-    <Image Include="worldtex.bmp" />
+    <ClCompile Include="sample.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
