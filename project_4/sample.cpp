@@ -477,7 +477,7 @@ Display()
 	SetMaterial(1.f, 1.f, 1.f, 1.f);
 	glTranslatef(0., 0., 0.);
 	glShadeModel(GL_FLAT);
-	//glutSolidTorus(.2, .7, 10, 10);
+	glutSolidTorus(.2, .7, 10, 10);
 	Sphere(0.3, SPHERE_SLICES, SPHERE_STACKS, 0, 0, 0);
 	Sphere(SPHERE_RADIUS, SPHERE_SLICES, SPHERE_STACKS, -2, -2, 0);
 	glShadeModel(GL_SMOOTH);
