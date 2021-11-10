@@ -14,12 +14,12 @@
 #include <GL/gl.h>
 #include <GL/glu.h>
 #include "glut.h"
+#include "glslprogram.h"
 
 
 //	This is a sample OpenGL / GLUT program
 //
-//	The objective is to draw a 3d object and change the color of the axes
-//		with a glut menu
+//	Draw on an object using OpenGL Shaders
 //
 //	The left mouse button does rotation
 //	The middle mouse button does scaling
@@ -34,6 +34,52 @@
 //
 //	Author:			Joe Graphics
 
+GLSLProgram *Pattern;
+unsigned char *Texture;
+GLuint TexName1, TexName2, SphereList;
+bool UseDistortion, UseTexture, Freeze, UseVertexShader, UseFragmentShader;
+const int MS_ANIMATION_INTERVAL = { 4000 };
+float TimeInterval;
+// points
+struct xyz {
+	float x;
+	float y;
+	float z;
+};
+#define SPHERE_RADIUS 1
+#define SPHERE_SLICES 10
+#define SPHERE_STACKS 10	
+
+int		NumLngs, NumLats;
+struct point* Pts;
+
+struct point
+{
+	float x, y, z;		// coordinates
+	float nx, ny, nz;	// surface normal
+	float s, t;		// texture coords
+};
+
+inline
+struct point*
+	PtsPointer(int lat, int lng)
+{
+	if (lat < 0)	lat += (NumLats - 1);
+	if (lng < 0)	lng += (NumLngs - 0);
+	if (lat > NumLats - 1)	lat -= (NumLats - 1);
+	if (lng > NumLngs - 1)	lng -= (NumLngs - 0);
+	return &Pts[NumLngs * lat + lng];
+}
+
+inline
+void
+DrawPoint(struct point* p)
+{
+	glNormal3fv(&p->nx);
+	glTexCoord2fv(&p->s);
+	glVertex3fv(&p->x);
+}
+void Sphere(float,int,int);
 // title of these windows:
 
 const char *WINDOWTITLE = { "OpenGL / GLUT Sample -- Joe Graphics" };
@@ -80,6 +126,13 @@ const float SCROLL_WHEEL_CLICK_FACTOR = { 5. };
 const int LEFT   = { 4 };
 const int MIDDLE = { 2 };
 const int RIGHT  = { 1 };
+
+// distortions
+enum DistortionTypes {
+	NoTexture,
+	Distort,
+	NoDistort
+};
 
 // which projection:
 
@@ -288,6 +341,7 @@ Animate( )
 void
 Display( )
 {
+	float S0, T0, Ds, Dt, V0, V1, V2, ColorR, ColorG, ColorB;
 	if( DebugOn != 0 )
 	{
 		fprintf( stderr, "Display\n" );
@@ -311,6 +365,30 @@ Display( )
 	// specify shading to be flat:
 
 	glShadeModel( GL_FLAT );
+
+	float x0 = 1., x1 = 2., x2 = 3.;
+	float y0 = -1., y1 = -2., y2 = -3.;
+	float z0 = 0., z1 = 0., z2 = 0.;
+	Pattern->Use();
+	glActiveTexture(GL_TEXTURE5);
+	glBindTexture(GL_TEXTURE_2D, TexName1);
+	Pattern->SetUniformVariable("uTexUnit", 5);
+	Pattern->SetUniformVariable("uS0", S0);
+	Pattern->SetUniformVariable("uT0", T0);
+	Pattern->SetUniformVariable("uDs", Ds);
+	Pattern->SetUniformVariable("uDt", Dt);
+	Pattern->SetUniformVariable("uColor", ColorR, ColorG, ColorB);
+
+	glBegin(GL_TRIANGLES);
+		//Pattern->SetAttributeVariable("aV0", V0);
+		glVertex3f(x0, y0, z0);
+		//Pattern->SetAttributeVariable("aV1", V1);
+		glVertex3f(x1, y1, z1);
+		//Pattern->SetAttributeVariable("aV2", V2);
+		glVertex3f(x2, y2, z2);
+	glEnd();
+
+	//Pattern->UnUse();
 
 	// set the viewport to a square centered in the window:
 
@@ -639,6 +717,8 @@ InitMenus( )
 void
 InitGraphics( )
 {
+
+
 	// request the display modes:
 	// ask for red-green-blue-alpha color, double-buffering, and z-buffering:
 
@@ -699,7 +779,7 @@ InitGraphics( )
 	glutTabletButtonFunc( NULL );
 	glutMenuStateFunc( NULL );
 	glutTimerFunc( -1, NULL, 0 );
-	glutIdleFunc( NULL );
+	glutIdleFunc( Animate );
 
 	// init glew (a window must be open to do this):
 
@@ -713,6 +793,27 @@ InitGraphics( )
 		fprintf( stderr, "GLEW initialized OK\n" );
 	fprintf( stderr, "Status: Using GLEW %s\n", glewGetString(GLEW_VERSION));
 #endif
+
+	//glGenTextures(1, &TexName1);
+	int nums = 500, numt = 500;
+	//Texture = BmpToTexture("filename.bmp", &nums, &numt);
+	//glBindTexture(GL_TEXTURE_2D, TexName1);
+	//glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	//glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+	//glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	//glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	//glTexImage2D(GL_TEXTURE_2D, 0, 3, nums, numt, 0, 3, GL_RGB, GL_UNSIGNED_BYTE, Texture);
+
+	Pattern = new GLSLProgram();
+	bool valid = Pattern->Create("pattern.vert", "pattern.frag");
+
+	if (!valid)
+	{
+		fprintf(stderr, "The shader could not be created.\n");
+		DoMainMenu(QUIT);
+	}
+	fprintf(stderr, "Create the shader.\n");
+	Pattern->SetVerbose(false);
 }
 
 
@@ -724,57 +825,11 @@ InitGraphics( )
 void
 InitLists( )
 {
-	float dx = BOXSIZE / 2.f;
-	float dy = BOXSIZE / 2.f;
-	float dz = BOXSIZE / 2.f;
-	glutSetWindow( MainWindow );
-
-	// create the object:
-
-	BoxList = glGenLists( 1 );
-	glNewList( BoxList, GL_COMPILE );
-
-		glBegin( GL_QUADS );
-
-			glColor3f( 0., 0., 1. );
-				glVertex3f( -dx, -dy,  dz );
-				glVertex3f(  dx, -dy,  dz );
-				glVertex3f(  dx,  dy,  dz );
-				glVertex3f( -dx,  dy,  dz );
-
-				glVertex3f( -dx, -dy, -dz );
-				glVertex3f( -dx,  dy, -dz );
-				glVertex3f(  dx,  dy, -dz );
-				glVertex3f(  dx, -dy, -dz );
-
-			glColor3f( 1., 0., 0. );
-				glVertex3f(  dx, -dy,  dz );
-				glVertex3f(  dx, -dy, -dz );
-				glVertex3f(  dx,  dy, -dz );
-				glVertex3f(  dx,  dy,  dz );
-
-				glVertex3f( -dx, -dy,  dz );
-				glVertex3f( -dx,  dy,  dz );
-				glVertex3f( -dx,  dy, -dz );
-				glVertex3f( -dx, -dy, -dz );
-
-			glColor3f( 0., 1., 0. );
-				glVertex3f( -dx,  dy,  dz );
-				glVertex3f(  dx,  dy,  dz );
-				glVertex3f(  dx,  dy, -dz );
-				glVertex3f( -dx,  dy, -dz );
-
-				glVertex3f( -dx, -dy,  dz );
-				glVertex3f( -dx, -dy, -dz );
-				glVertex3f(  dx, -dy, -dz );
-				glVertex3f(  dx, -dy,  dz );
-
-		glEnd( );
-
-	glEndList( );
-
+	SphereList = glGenLists(1);
+	glNewList(SphereList, GL_COMPILE);
+	Sphere(SPHERE_RADIUS, SPHERE_SLICES, SPHERE_STACKS);
+	glEndList();
 	// create the axes:
-
 	AxesList = glGenLists( 1 );
 	glNewList( AxesList, GL_COMPILE );
 		glLineWidth( AXES_WIDTH );
@@ -1441,4 +1496,103 @@ Unit(float vin[3], float vout[3])
 		vout[2] = vin[2];
 	}
 	return dist;
+}
+void
+Sphere(float radius, int slices, int stacks)
+{
+	// set the globals:
+
+	NumLngs = slices;
+	NumLats = stacks;
+	if (NumLngs < 3)
+		NumLngs = 3;
+	if (NumLats < 3)
+		NumLats = 3;
+
+	// allocate the point data structure:
+
+	Pts = new struct point[NumLngs * NumLats];
+
+	// fill the Pts structure:
+
+	for (int ilat = 0; ilat < NumLats; ilat++)
+	{
+		float lat = -M_PI / 2. + M_PI * (float)ilat / (float)(NumLats - 1);	// ilat=0/lat=0. is the south pole
+											// ilat=NumLats-1, lat=+M_PI/2. is the north pole
+		float xz = cosf(lat);
+		float  y = sinf(lat);
+		for (int ilng = 0; ilng < NumLngs; ilng++)				// ilng=0, lng=-M_PI and
+											// ilng=NumLngs-1, lng=+M_PI are the same meridian
+		{
+			float lng = -M_PI + 2. * M_PI * (float)ilng / (float)(NumLngs - 1);
+			float x = xz * cosf(lng);
+			float z = -xz * sinf(lng);
+			struct point* p = PtsPointer(ilat, ilng);
+			p->x = radius * x;
+			p->y = radius * y;
+			p->z = radius * z;
+			p->nx = x;
+			p->ny = y;
+			p->nz = z;
+			p->s = (lng + M_PI) / (2. * M_PI);
+			p->t = (lat + M_PI / 2.) / M_PI;
+		}
+	}
+
+	struct point top, bot;		// top, bottom points
+
+	top.x = 0.;		top.y = radius;	top.z = 0.;
+	top.nx = 0.;		top.ny = 1.;		top.nz = 0.;
+	top.s = 0.;		top.t = 1.;
+
+	bot.x = 0.;		bot.y = -radius;	bot.z = 0.;
+	bot.nx = 0.;		bot.ny = -1.;		bot.nz = 0.;
+	bot.s = 0.;		bot.t = 0.;
+
+	// connect the north pole to the latitude NumLats-2:
+
+	glBegin(GL_TRIANGLE_STRIP);
+	for (int ilng = 0; ilng < NumLngs; ilng++)
+	{
+		float lng = -M_PI + 2. * M_PI * (float)ilng / (float)(NumLngs - 1);
+		top.s = (lng + M_PI) / (2. * M_PI);
+		DrawPoint(&top);
+		struct point* p = PtsPointer(NumLats - 2, ilng);	// ilat=NumLats-1 is the north pole
+		DrawPoint(p);
+	}
+	glEnd();
+
+	// connect the south pole to the latitude 1:
+
+	glBegin(GL_TRIANGLE_STRIP);
+	for (int ilng = NumLngs - 1; ilng >= 0; ilng--)
+	{
+		float lng = -M_PI + 2. * M_PI * (float)ilng / (float)(NumLngs - 1);
+		bot.s = (lng + M_PI) / (2. * M_PI);
+		DrawPoint(&bot);
+		struct point* p = PtsPointer(1, ilng);					// ilat=0 is the south pole
+		DrawPoint(p);
+	}
+	glEnd();
+
+	// connect the horizontal strips:
+
+	for (int ilat = 2; ilat < NumLats - 1; ilat++)
+	{
+		struct point* p;
+		glBegin(GL_TRIANGLE_STRIP);
+		for (int ilng = 0; ilng < NumLngs; ilng++)
+		{
+			p = PtsPointer(ilat, ilng);
+			DrawPoint(p);
+			p = PtsPointer(ilat - 1, ilng);
+			DrawPoint(p);
+		}
+		glEnd();
+	}
+
+	// clean-up:
+
+	delete[] Pts;
+	Pts = NULL;
 }
