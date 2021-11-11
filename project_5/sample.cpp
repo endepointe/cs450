@@ -224,6 +224,7 @@ int		MainWindow;				// window id for main graphics window
 float	Scale;					// scaling factor
 float	Time;					// timer in the range [0.,1.)
 float TimeInterval;
+float uSize;
 int		WhichColor;				// index into Colors[ ]
 int		WhichProjection;		// ORTHO or PERSP
 int		Xmouse, Ymouse;			// mouse values
@@ -329,11 +330,7 @@ Animate()
 	int ms = glutGet(GLUT_ELAPSED_TIME);			// milliseconds since the program started
 	ms %= MS_PER_CYCLE;				// milliseconds in the range 0 to MS_IN_THE_ANIMATION_CYCLE-1
 	Time = (float)ms / (float)MS_PER_CYCLE - 1;        // [ 0., 1. )
-	TimeInterval = (float)ms / (float)MS_PER_CYCLE * 2;
-
-	//
-	// do the sahder stuffs here
-	//
+	//TimeInterval = (float)ms / (float)MS_PER_CYCLE * 2;
 
 	// force a call to Display( ) next time it is convenient:
 	glutSetWindow(MainWindow);
@@ -346,6 +343,31 @@ Animate()
 void
 Display()
 {
+	float S0, T0;
+	float Ds, Dt; 
+	float V0, V1, V2; 
+	float ColorR, ColorG, ColorB, SColorR, SColorG, SColorB; 
+	float uKa, uKd, uKs; 
+	float px, py, pz;
+	float distance;
+
+	S0 = 0.;
+	T0 = 1.;
+	ColorR = 0.9;
+	ColorG = 0.63;
+	ColorB = 0.34;
+	SColorR = .2;
+	SColorG = .4;
+	SColorB = .8;
+	uKa = 0.8;
+	uKd = 0.5;
+	uKs = 0.31;
+	uSize = 5.0;
+	px = cos(Time) * 2;
+	py = cos(Time * 4.) * 3;
+	pz = sin(Time*8.) * 2;
+	distance = 8.;
+
 	if (DebugOn != 0)
 	{
 		fprintf(stderr, "Display\n");
@@ -367,8 +389,7 @@ Display()
 #endif
 
 	// specify shading to be flat:
-
-	glShadeModel(GL_SMOOTH);
+	glShadeModel(GL_FLAT);
 
 	// set the viewport to a square centered in the window:
 
@@ -437,90 +458,40 @@ Display()
 	}
 
 	glEnable(GL_NORMALIZE);
-
-	glLightModelfv(GL_LIGHT_MODEL_AMBIENT, MulArray3(.3f, White));
-	glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
-	glEnable(GL_LIGHTING);
-
-	// since we are using glScalef( ), be sure normals get unitized:
-	// draw sphere
-	glEnable(GL_TEXTURE_2D);
-	glBindTexture(GL_TEXTURE_2D, texType);
-
-#define RAD 20.f
-	// moving light source0
-	float theta = (float)(2. * M_PI) * Time;
-	glPushMatrix();
-	SetPointLight(GL_LIGHT0, (float)(RAD * cos(theta)), 0., (float)(RAD * sin(theta)), 1., 1., 1.);
-
-	glDisable(GL_LIGHTING);
-	glColor3f(1., 1., 1.);
-	glPushMatrix();
-	glTranslatef((float)(RAD * cos(theta)), 0., (float)(RAD * sin(theta)));
-	glutSolidSphere(.3, 10, 10);
-	glPopMatrix();
-
-	glPushMatrix();
-	glTranslatef(0., 0.5, -2.5);
-	glColor3f(0.7, 0.9, 0.1);
-	glutSolidSphere(0.05, 50, 50);
-	SetSpotLight(GL_LIGHT1, 0., 0.5, -2.5, 0., -0.3, 1.5, .7, .9, .1);
-	glPopMatrix();
-
-	glPushMatrix();
-	glTranslatef(1., 0., 1.);
-	glColor3f(0.9, 0.1, 0.1);
-	glutSolidSphere(0.05, 50, 50);
-	SetSpotLight(GL_LIGHT2, 1., 0., 1., -1., 0., -1., .9, .1, .1);
-	glPopMatrix();
-
-	(Light0On) ? glEnable(GL_LIGHT0) : glDisable(GL_LIGHT0);
-	(Light1On) ? glEnable(GL_LIGHT1) : glDisable(GL_LIGHT1);
-	(Light2On) ? glEnable(GL_LIGHT2) : glDisable(GL_LIGHT2);
-
-	glPopMatrix();
 	glEnable(GL_LIGHTING);
 
 	Pattern->Use();
-	Pattern->SetUniformVariable("uTime", Time);
-	glCallList(SphereList);
-	Pattern->Use(0);
+	Pattern->SetUniformVariable("uS0", S0);
+	Pattern->SetUniformVariable("uT0", T0);
+	Pattern->SetUniformVariable("uColor", ColorR, ColorG, ColorB);
+	Pattern->SetUniformVariable("uSize", uSize);
+	Pattern->SetUniformVariable("uSColor", SColorR, SColorG, SColorB);
+	Pattern->SetUniformVariable("uKa", uKa);
+	Pattern->SetUniformVariable("uKa", uKd);
+	Pattern->SetUniformVariable("uKs", uKs);
+	Pattern->SetUniformVariable("uUseFragmentShader", UseFragmentShader);
+	Pattern->SetUniformVariable("uUseVertexShader", UseVertexShader);
 
 	glShadeModel(GL_FLAT);
-	SetMaterial(0.3, 0., 1., 0.3);
-	glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
 
-	Sphere(0.3, SPHERE_SLICES, SPHERE_STACKS, 0, 0, 0);
-
-	
-	/*
 	glPushMatrix();
-	// shiny
 	SetMaterial(1.f, 1.f, 1.f, 1.f);
 	glTranslatef(0., 0., 0.);
 	glShadeModel(GL_FLAT);
-	glutSolidTorus(.2, .7, 10, 10);
 	Sphere(0.3, SPHERE_SLICES, SPHERE_STACKS, 0, 0, 0);
 	Sphere(SPHERE_RADIUS, SPHERE_SLICES, SPHERE_STACKS, -2, -2, 0);
 	glShadeModel(GL_SMOOTH);
-	glutSolidTorus(12., 19., 10, 10);
 	glPopMatrix();
-	// dull
 	SetMaterial(1.f, 1.f, 1.f, 96.f);
 	Sphere(SPHERE_RADIUS, SPHERE_SLICES, SPHERE_STACKS, 0, 3, -5);
 	glTranslatef(3. * sin(Time), 2, 2.9 * cos(Time));
 	Sphere(SPHERE_RADIUS, SPHERE_SLICES, SPHERE_STACKS, 2, 0, 2);
 	glPopMatrix();
-	*/
 
-	glDisable(GL_LIGHTING);
-	glDisable(GL_DEPTH_TEST);
-	glMatrixMode(GL_PROJECTION);
-	glLoadIdentity();
-	gluOrtho2D(0., 100., 0., 100.);
-	glMatrixMode(GL_MODELVIEW);
-	glLoadIdentity();
-	glColor3f(1., 1., 1.);
+	Pattern->Use(0);
+
+	SetPointLight(GL_LIGHT0, 5., 5., 5., 1., 1., 1.);
+
 
 	// swap the double-buffered framebuffers:
 	glutSwapBuffers();
@@ -818,7 +789,7 @@ InitGraphics()
 	glutMouseFunc(MouseButton);
 	glutMotionFunc(MouseMotion);
 	glutPassiveMotionFunc(MouseMotion);
-	//glutPassiveMotionFunc( NULL );
+	glutPassiveMotionFunc( NULL );
 	glutVisibilityFunc(Visibility);
 	glutEntryFunc(NULL);
 	glutSpecialFunc(NULL);
@@ -868,10 +839,10 @@ InitLists()
 {
 	glutSetWindow(MainWindow);
 
-	SphereList = glGenLists(1);
-	glNewList(SphereList, GL_COMPILE);
-	Sphere(SPHERE_RADIUS, SPHERE_SLICES, SPHERE_STACKS, -1, 0, 0);
-	glEndList();
+	//SphereList = glGenLists(1);
+	//glNewList(SphereList, GL_COMPILE);
+	//Sphere(SPHERE_RADIUS, SPHERE_SLICES, SPHERE_STACKS, -1, 0, 0);
+	//glEndList();
 
 	// create the axes:
 	AxesList = glGenLists(1);
