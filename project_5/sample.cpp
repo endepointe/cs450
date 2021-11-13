@@ -8,84 +8,48 @@
 #ifdef WIN32
 #include <windows.h>
 #pragma warning(disable:4996)
+#include "glew.h"
 #endif
 
-#include "glew.h"
+#include "glslprogram.h"
+#include "glslprogram.cpp"
+
 #include <GL/gl.h>
 #include <GL/glu.h>
 #include "glut.h"
-#include "glslprogram.h"
-
-GLSLProgram *Pattern;
-const int MS_ANIMATION_INTERVAL = {4000};
 
 
-//	This is a sample OpenGL / GLUT program
-//
-//	The goal of this project is to map a texture to an object and then
-//	distort it in some way.
-//
-//	The left mouse button does rotation
-//	The middle mouse button does scaling
-//	The user interface allows:
-//		1. The axes to be turned on and off
-//		2. Texture on/off with distortion
-//		3. Debugging to be turned on and off
-//		4. Depth cueing to be turned on and off
-//		5. The projection to be changed
-//		6. The transformations to be reset
-//		7. The program to quit
-//
-//	Author: Alvin Johns
+
 
 // title of these windows:
 
-const char* WINDOWTITLE = { "OpenGL / Project 4 -- Alvin Johns" };
+const char* WINDOWTITLE = { "Project 5 -- Alvin Johns" };
 const char* GLUITITLE = { "User Interface Window" };
-
-// what the glui package defines as true and false:
 
 const int GLUITRUE = { true };
 const int GLUIFALSE = { false };
 
-// the escape key:
-
-const int ESCAPE = { 0x1b };
-
-// initial window size:
+#define ESCAPE		0x1b
 
 const int INIT_WINDOW_SIZE = { 800 };
 
-// size of the 3d box:
 
 const float BOXSIZE = { 2.f };
-
-// multiplication factors for input interaction:
-//  (these are known from previous experience)
+const float CYLINDERSIZE = { 2.f };
 
 const float ANGFACT = { 1. };
 const float SCLFACT = { 0.005f };
 
-// minimum allowable scale factor:
-
 const float MINSCALE = { 0.05f };
-
-// scroll wheel button values:
 
 const int SCROLL_WHEEL_UP = { 3 };
 const int SCROLL_WHEEL_DOWN = { 4 };
 
-// equivalent mouse movement when we click a the scroll wheel:
-
 const float SCROLL_WHEEL_CLICK_FACTOR = { 5. };
-
-// active mouse buttons (or them together):
 
 const int LEFT = { 4 };
 const int MIDDLE = { 2 };
 const int RIGHT = { 1 };
-
-const int MS_PER_CYCLE = { 6000 };
 
 // which projection:
 
@@ -103,20 +67,9 @@ enum ButtonVals
 	QUIT
 };
 
-enum DistortionTypes {
-	NoDistortion,
-	Distortion
-};
-// window background color (rgba):
-
 const GLfloat BACKCOLOR[] = { 0., 0., 0., 1. };
 
-// line width for the axes:
-
 const GLfloat AXES_WIDTH = { 3. };
-
-// the color numbers:
-// this order must match the radio button order
 
 enum Colors
 {
@@ -132,18 +85,15 @@ enum Colors
 
 char* ColorNames[] =
 {
-	(char*)"Red",
-	(char*)"Yellow",
-	(char*)"Green",
-	(char*)"Cyan",
-	(char*)"Blue",
-	(char*)"Magenta",
-	(char*)"White",
-	(char*)"Black"
+	"Red",
+	"Yellow",
+	"Green",
+	"Cyan",
+	"Blue",
+	"Magenta",
+	"White",
+	"Black"
 };
-
-// the color definitions:
-// this order must match the menu order
 
 const GLfloat Colors[][3] =
 {
@@ -157,158 +107,114 @@ const GLfloat Colors[][3] =
 	{ 0., 0., 0. },		// black
 };
 
-// fog parameters:
-
 const GLfloat FOGCOLOR[4] = { .0, .0, .0, 1. };
 const GLenum  FOGMODE = { GL_LINEAR };
 const GLfloat FOGDENSITY = { 0.30f };
 const GLfloat FOGSTART = { 1.5 };
 const GLfloat FOGEND = { 4. };
 
-int		NumLngs, NumLats;
-struct point* Pts;
-
-struct point
-{
-	float x, y, z;		// coordinates
-	float nx, ny, nz;	// surface normal
-	float s, t;		// texture coords
-};
-
-inline
-struct point*
-	PtsPointer(int lat, int lng)
-{
-	if (lat < 0)	lat += (NumLats - 1);
-	if (lng < 0)	lng += (NumLngs - 0);
-	if (lat > NumLats - 1)	lat -= (NumLats - 1);
-	if (lng > NumLngs - 1)	lng -= (NumLngs - 0);
-	return &Pts[NumLngs * lat + lng];
-}
-// Sphere params
-#define SPHERE_RADIUS	1
-#define SPHERE_SLICES 100
-#define	SPHERE_STACKS	100
-#define BMP_MAGIC_NUMBER	0x4d42
-#ifndef BI_RGB
-#define BI_RGB			0
-#define BI_RLE8			1
-#define BI_RLE4			2
-#endif
-
-// what options should we compile-in?
-// in general, you don't need to worry about these
-// i compile these in to show class examples of things going wrong
-//#define DEMO_Z_FIGHTING
-//#define DEMO_DEPTH_BUFFER
-
-// non-constant global variables:
 
 int		ActiveButton;			// current button that is down
 GLuint	AxesList;				// list to hold the axes
-GLuint SphereList;
 int		AxesOn;					// != 0 means to draw the axes
-GLuint	texType;				// texture type 
-bool TurnDistortionOff, TurnDistortionOn;
-bool Freeze;
-bool Light0On;
-bool Light1On;
-bool Light2On;
-bool UseVertexShader;
-bool UseFragmentShader;
 int		DebugOn;				// != 0 means to print debugging info
 int		DepthCueOn;				// != 0 means to use intensity depth cueing
-int		DepthBufferOn;			// != 0 means to use the z-buffer
-int		DepthFightingOn;		// != 0 means to force the creation of z-fighting
+GLuint TeapotList; 
 int		MainWindow;				// window id for main graphics window
 float	Scale;					// scaling factor
-float	Time;					// timer in the range [0.,1.)
-float TimeInterval;
-float uSize;
 int		WhichColor;				// index into Colors[ ]
 int		WhichProjection;		// ORTHO or PERSP
 int		Xmouse, Ymouse;			// mouse values
 float	Xrot, Yrot;				// rotation angles in degrees
+bool	Freeze = FALSE;
+bool	vertPattern = TRUE;
+bool	fragPattern = TRUE;
+float  Time = 0.;
 float White[3] = { 1.,1.,1. };
 
+GLSLProgram* Pattern;
+
+#include "bmptotexture.cpp"
+
 // function prototypes:
+
 void	Animate();
 void	Display();
 void	DoAxesMenu(int);
 void	DoColorMenu(int);
-void	DoDepthBufferMenu(int);
-void	DoDepthFightingMenu(int);
 void	DoDepthMenu(int);
 void	DoDebugMenu(int);
 void	DoMainMenu(int);
 void	DoProjectMenu(int);
-void	DoShadowMenu();
 void	DoRasterString(float, float, float, char*);
 void	DoStrokeString(float, float, float, float, char*);
 float	ElapsedSeconds();
 void	InitGraphics();
 void	InitLists();
 void	InitMenus();
-void	InitTextures();
 void	Keyboard(unsigned char, int, int);
 void	MouseButton(int, int, int, int);
 void	MouseMotion(int, int);
 void	Reset();
 void	Resize(int, int);
 void	Visibility(int);
-
-void			Axes(float);
-void			HsvRgb(float[3], float[3]);
-int				ReadInt(FILE*);
-short			ReadShort(FILE*);
-
-void			Cross(float[3], float[3], float[3]);
-float			Dot(float[3], float[3]);
-float			Unit(float[3], float[3]);
-
-void	SetMaterial(float, float, float, float);
-void	SetPointLight(int, float, float, float, float, float, float);
-void	SetSpotLight(int, float, float, float, float, float, float, float, float, float);
-
+float Dot(float[3], float[3]);
+void Cross(float[3], float[3], float[3]);
+float Unit(float[3], float[3]);
 float* Array3(float, float, float);
-float* Array4(float, float, float, float);
-float* BlendArray3(float, float[3], float[3]);
 float* MulArray3(float, float[3]);
+void SetMaterial(float, float, float, float);
+void SetPointLight(int, float, float, float, float, float, float);
+void SetSpotLight(int, float, float, float, float, float, float, float, float, float);
 
-unsigned char* BmpToTexture(char* file, int* width, int* height);
-void Sphere(float radius, int slices, int stacks, int xpos, int ypos, int zpos);
+
+void	Axes(float);
+void	HsvRgb(float[3], float[3]);
+
+#define MS_PER_CYCLE 4000
+
 
 // main program:
 
 int
 main(int argc, char* argv[])
 {
-	//checking argc and argv since it might
+	// turn on the glut package:
+	// (do this before checking argc and argv since it might
+	// pull some command line arguments out)
 
 	glutInit(&argc, argv);
 
+
 	// setup all the graphics stuff:
+
 	InitGraphics();
 
-	// get the textures
-	InitTextures();
 
 	// create the display structures that will not change:
+
 	InitLists();
 
+
 	// init all the global variables used by Display( ):
+	// this will also post a redisplay
+
 	Reset();
 
+
 	// setup all the user interface stuff:
+
 	InitMenus();
+
 
 	// draw the scene once and wait for some interaction:
 	// (this will never return)
+
 	glutSetWindow(MainWindow);
 	glutMainLoop();
 
-	// glutMainLoop( ) never returns
-	// this line is here to make the compiler happy:
+
+	// this is here to make the compiler happy:
 
 	return 0;
 }
@@ -326,13 +232,10 @@ Animate()
 {
 	// put animation stuff in here -- change some global variables
 	// for Display( ) to find:
+	int ms = glutGet(GLUT_ELAPSED_TIME);
+	ms %= MS_PER_CYCLE;
+	Time = (float)ms / (float)MS_PER_CYCLE - 1;
 
-	int ms = glutGet(GLUT_ELAPSED_TIME);			// milliseconds since the program started
-	ms %= MS_PER_CYCLE;				// milliseconds in the range 0 to MS_IN_THE_ANIMATION_CYCLE-1
-	Time = (float)ms / (float)MS_PER_CYCLE - 1;        // [ 0., 1. )
-	//TimeInterval = (float)ms / (float)MS_PER_CYCLE * 2;
-
-	// force a call to Display( ) next time it is convenient:
 	glutSetWindow(MainWindow);
 	glutPostRedisplay();
 }
@@ -343,53 +246,28 @@ Animate()
 void
 Display()
 {
-	float S0, T0;
-	float Ds, Dt; 
-	float V0, V1, V2; 
-	float ColorR, ColorG, ColorB, SColorR, SColorG, SColorB; 
-	float uKa, uKd, uKs; 
-	float px, py, pz;
-	float distance;
-
-	S0 = 0.;
-	T0 = 1.;
-	ColorR = 0.9;
-	ColorG = 0.63;
-	ColorB = 0.34;
-	SColorR = .2;
-	SColorG = .4;
-	SColorB = .8;
-	uKa = 0.8;
-	uKd = 0.5;
-	uKs = 0.31;
-	uSize = 5.0;
-	px = cos(Time) * 2;
-	py = cos(Time * 4.) * 3;
-	pz = sin(Time*8.) * 2;
-	distance = 8.;
-
 	if (DebugOn != 0)
 	{
 		fprintf(stderr, "Display\n");
 	}
 
+
 	// set which window we want to do the graphics into:
 
 	glutSetWindow(MainWindow);
+
 
 	// erase the background:
 
 	glDrawBuffer(GL_BACK);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
 	glEnable(GL_DEPTH_TEST);
-#ifdef DEMO_DEPTH_BUFFER
-	if (DepthBufferOn == 0)
-		glDisable(GL_DEPTH_TEST);
-#endif
+
 
 	// specify shading to be flat:
+
 	glShadeModel(GL_FLAT);
+
 
 	// set the viewport to a square centered in the window:
 
@@ -400,10 +278,6 @@ Display()
 	GLint yb = (vy - v) / 2;
 	glViewport(xl, yb, v, v);
 
-	// set the viewing volume:
-	// remember that the Z clipping  values are actually
-	// given as DISTANCES IN FRONT OF THE EYE
-	// USE gluOrtho2D( ) IF YOU ARE DOING 2D !
 
 	glMatrixMode(GL_PROJECTION);
 	glLoadIdentity();
@@ -412,28 +286,19 @@ Display()
 	else
 		gluPerspective(90., 1., 0.1, 1000.);
 
-	// place the objects into the scene:
 
 	glMatrixMode(GL_MODELVIEW);
 	glLoadIdentity();
 
-	// set the eye position, look-at position, and up-vector:
 
-	gluLookAt(0., 0., 3., 0., 0., 0., 0., 1., 0.);
-
-	// rotate the scene:
+	gluLookAt(0., 0., 8., 0., 0., 0., 0., 1., 0.);
 
 	glRotatef((GLfloat)Yrot, 0., 1., 0.);
 	glRotatef((GLfloat)Xrot, 1., 0., 0.);
 
-	// uniformly scale the scene:
-
 	if (Scale < MINSCALE)
 		Scale = MINSCALE;
 	glScalef((GLfloat)Scale, (GLfloat)Scale, (GLfloat)Scale);
-
-	// set the fog parameters:
-	// (this is really here to do intensity depth cueing)
 
 	if (DepthCueOn != 0)
 	{
@@ -449,6 +314,7 @@ Display()
 		glDisable(GL_FOG);
 	}
 
+
 	// possibly draw the axes:
 
 	if (AxesOn != 0)
@@ -457,43 +323,64 @@ Display()
 		glCallList(AxesList);
 	}
 
+
+	// since we are using glScalef( ), be sure normals get unitized:
+
 	glEnable(GL_NORMALIZE);
+
+	// Do lighting
 	glEnable(GL_LIGHTING);
+	glShadeModel(GL_SMOOTH);
+
+	float S0, T0;
+	float Ds, Dt;
+	float V0, V1, V2;
+	float R, G, B;
+	float specR, specG, specB;
+	float uKa, uKd, uKs;
+	float pointx, pointy, pointz;
+	float maxdist;
+
+	S0 = 0.;
+	T0 = 0.;
+	R = 0.2;
+	G = 0.9;
+	B = 0.2;
+	specR = .9;
+	specG = .2;
+	specB = .9;
+	uKa = 0.6;
+	uKd = 0.6;
+	uKs = 0.6;
+	pointx = M_PI * sin(Time * 20) + 2;
+	pointy = cos(Time * 3.) * 2;
+	pointz = cos(Time * 10.) / 3;
+	maxdist = 6.;
 
 	Pattern->Use();
 	Pattern->SetUniformVariable("uS0", S0);
 	Pattern->SetUniformVariable("uT0", T0);
-	Pattern->SetUniformVariable("uColor", ColorR, ColorG, ColorB);
-	Pattern->SetUniformVariable("uSize", uSize);
-	Pattern->SetUniformVariable("uSColor", SColorR, SColorG, SColorB);
+	Pattern->SetUniformVariable("uColor", R, G, B);
+	Pattern->SetUniformVariable("uSpecularColor", specR, specG, specB);
 	Pattern->SetUniformVariable("uKa", uKa);
-	Pattern->SetUniformVariable("uKa", uKd);
+	Pattern->SetUniformVariable("uKd", uKd);
 	Pattern->SetUniformVariable("uKs", uKs);
-	Pattern->SetUniformVariable("uUseFragmentShader", UseFragmentShader);
-	Pattern->SetUniformVariable("uUseVertexShader", UseVertexShader);
+	Pattern->SetUniformVariable("uTime", Time);
+	Pattern->SetUniformVariable("vertPattern", vertPattern);
+	Pattern->SetUniformVariable("fragPattern", fragPattern);
 
-	glShadeModel(GL_FLAT);
+
+	glShadeModel(GL_SMOOTH);
 
 	glPushMatrix();
-	SetMaterial(1.f, 1.f, 1.f, 1.f);
-	glTranslatef(0., 0., 0.);
-	glShadeModel(GL_FLAT);
-	Sphere(0.3, SPHERE_SLICES, SPHERE_STACKS, 0, 0, 0);
-	Sphere(SPHERE_RADIUS, SPHERE_SLICES, SPHERE_STACKS, -2, -2, 0);
-	glShadeModel(GL_SMOOTH);
-	glPopMatrix();
-	SetMaterial(1.f, 1.f, 1.f, 96.f);
-	Sphere(SPHERE_RADIUS, SPHERE_SLICES, SPHERE_STACKS, 0, 3, -5);
-	glTranslatef(3. * sin(Time), 2, 2.9 * cos(Time));
-	Sphere(SPHERE_RADIUS, SPHERE_SLICES, SPHERE_STACKS, 2, 0, 2);
+	SetMaterial(.7, .7, .3, 0.);
+	//glScalef(5. * Time, 6. * Time, 3. * Time);
+	glCallList(TeapotList);
 	glPopMatrix();
 
 	Pattern->Use(0);
 
-	SetPointLight(GL_LIGHT0, 5., 5., 5., 1., 1., 1.);
-
-
-	// swap the double-buffered framebuffers:
+	glDisable(GL_DEPTH_TEST);
 	glutSwapBuffers();
 	glFlush();
 }
@@ -503,22 +390,17 @@ void
 DoAxesMenu(int id)
 {
 	AxesOn = id;
-	glutSetWindow(MainWindow);
-	glutPostRedisplay();
-}
-
-void DoDistortionMenu(int id) {
-	TurnDistortionOn = (id == Distortion);
-	TurnDistortionOff = (id == NoDistortion);
 
 	glutSetWindow(MainWindow);
 	glutPostRedisplay();
 }
+
 
 void
 DoColorMenu(int id)
 {
 	WhichColor = id - RED;
+
 	glutSetWindow(MainWindow);
 	glutPostRedisplay();
 }
@@ -528,34 +410,17 @@ void
 DoDebugMenu(int id)
 {
 	DebugOn = id;
+
 	glutSetWindow(MainWindow);
 	glutPostRedisplay();
 }
-
-
-void
-DoDepthBufferMenu(int id)
-{
-	DepthBufferOn = id;
-	glutSetWindow(MainWindow);
-	glutPostRedisplay();
-}
-
-
-void
-DoDepthFightingMenu(int id)
-{
-	DepthFightingOn = id;
-	glutSetWindow(MainWindow);
-	glutPostRedisplay();
-}
-
 
 
 void
 DoDepthMenu(int id)
 {
 	DepthCueOn = id;
+
 	glutSetWindow(MainWindow);
 	glutPostRedisplay();
 }
@@ -573,9 +438,6 @@ DoMainMenu(int id)
 		break;
 
 	case QUIT:
-		// gracefully close out the graphics:
-		// gracefully close the graphics window:
-		// gracefully exit the program:
 		glutSetWindow(MainWindow);
 		glFinish();
 		glutDestroyWindow(MainWindow);
@@ -583,7 +445,7 @@ DoMainMenu(int id)
 		break;
 
 	default:
-		fprintf(stderr, "Don't know what to do with Main Menu ID %d\n", id);
+		fprintf(stderr, "uh %d\n", id);
 	}
 
 	glutSetWindow(MainWindow);
@@ -595,9 +457,11 @@ void
 DoProjectMenu(int id)
 {
 	WhichProjection = id;
+
 	glutSetWindow(MainWindow);
 	glutPostRedisplay();
 }
+
 
 // use glut to display a string of characters using a raster font:
 
@@ -605,6 +469,7 @@ void
 DoRasterString(float x, float y, float z, char* s)
 {
 	glRasterPos3f((GLfloat)x, (GLfloat)y, (GLfloat)z);
+
 	char c;			// one character to print
 	for (; (c = *s) != '\0'; s++)
 	{
@@ -637,9 +502,12 @@ float
 ElapsedSeconds()
 {
 	// get # of milliseconds since the start of the program:
-	int ms = glutGet(GLUT_ELAPSED_TIME);
+
+	int ms = glutGet(GLUT_ELAPSED_TIME);	// milliseconds
+	ms %= MS_PER_CYCLE;
 
 	// convert it to seconds:
+
 	return (float)ms / 1000.f;
 }
 
@@ -662,19 +530,7 @@ InitMenus()
 	glutAddMenuEntry("Off", 0);
 	glutAddMenuEntry("On", 1);
 
-	int distortionmenu = glutCreateMenu(DoDistortionMenu);
-	glutAddMenuEntry("Texture without distortion", NoDistortion);
-	glutAddMenuEntry("Texture with distortion", Distortion);
-
 	int depthcuemenu = glutCreateMenu(DoDepthMenu);
-	glutAddMenuEntry("Off", 0);
-	glutAddMenuEntry("On", 1);
-
-	int depthbuffermenu = glutCreateMenu(DoDepthBufferMenu);
-	glutAddMenuEntry("Off", 0);
-	glutAddMenuEntry("On", 1);
-
-	int depthfightingmenu = glutCreateMenu(DoDepthFightingMenu);
 	glutAddMenuEntry("Off", 0);
 	glutAddMenuEntry("On", 1);
 
@@ -689,17 +545,7 @@ InitMenus()
 	int mainmenu = glutCreateMenu(DoMainMenu);
 	glutAddSubMenu("Axes", axesmenu);
 	glutAddSubMenu("Colors", colormenu);
-
-#ifdef DEMO_DEPTH_BUFFER
-	glutAddSubMenu("Depth Buffer", depthbuffermenu);
-#endif
-
-#ifdef DEMO_Z_FIGHTING
-	glutAddSubMenu("Depth Fighting", depthfightingmenu);
-#endif
-
 	glutAddSubMenu("Depth Cue", depthcuemenu);
-	glutAddSubMenu("Distort", distortionmenu);
 	glutAddSubMenu("Projection", projmenu);
 	glutAddMenuEntry("Reset", RESET);
 	glutAddSubMenu("Debug", debugmenu);
@@ -707,34 +553,10 @@ InitMenus()
 
 	// attach the pop-up menu to the right mouse button:
 
-
 	glutAttachMenu(GLUT_RIGHT_BUTTON);
 }
 
-// import textures
-void InitTextures() {
-	int width, height, level, ncomps, border;
-	level = 0;
-	ncomps = 3;
-	border = 0;
 
-	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-
-	glGenTextures(1, &texType);
-
-	width = height = 200;
-	unsigned char* Texture = BmpToTexture((char*)"worldtex.bmp", &width, &height);
-
-	glBindTexture(GL_TEXTURE_2D, texType);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
-	glTexImage2D(GL_TEXTURE_2D, level, ncomps, width, height, border, GL_RGB, GL_UNSIGNED_BYTE, Texture);
-
-	glMatrixMode(GL_TEXTURE);
-}
 
 // initialize the glut and OpenGL libraries:
 //	also setup display lists and callback functions
@@ -742,6 +564,8 @@ void InitTextures() {
 void
 InitGraphics()
 {
+
+
 	// request the display modes:
 	// ask for red-green-blue-alpha color, double-buffering, and z-buffering:
 
@@ -788,8 +612,7 @@ InitGraphics()
 	glutKeyboardFunc(Keyboard);
 	glutMouseFunc(MouseButton);
 	glutMotionFunc(MouseMotion);
-	glutPassiveMotionFunc(MouseMotion);
-	glutPassiveMotionFunc( NULL );
+	glutPassiveMotionFunc(NULL);
 	glutVisibilityFunc(Visibility);
 	glutEntryFunc(NULL);
 	glutSpecialFunc(NULL);
@@ -817,17 +640,13 @@ InitGraphics()
 	fprintf(stderr, "Status: Using GLEW %s\n", glewGetString(GLEW_VERSION));
 #endif
 
+	// Load our shaders
 	Pattern = new GLSLProgram();
 	bool valid = Pattern->Create("pattern.vert", "pattern.frag");
-	if (!valid)
-	{
-		fprintf(stderr, "Unable to create pattern shader.\n");
-		DoMainMenu(QUIT);
+	if (!valid) {
+		fprintf(stderr, "Failed to create shader pattern");
 	}
-	fprintf(stdout, "Created the shader.\n");
-	Pattern->SetVerbose(false);
 }
-
 
 // initialize the display lists that will not change:
 // (a display list is a way to store opengl commands in
@@ -837,14 +656,18 @@ InitGraphics()
 void
 InitLists()
 {
+
 	glutSetWindow(MainWindow);
 
-	//SphereList = glGenLists(1);
-	//glNewList(SphereList, GL_COMPILE);
-	//Sphere(SPHERE_RADIUS, SPHERE_SLICES, SPHERE_STACKS, -1, 0, 0);
-	//glEndList();
+	TeapotList = glGenLists(1);
+	glNewList(TeapotList, GL_COMPILE);
+	glPushMatrix();
+	//glTranslatef(2., 3., 3.);
+	glColor3f(.3, .6, .6);
+	glutSolidTeapot(1);
+	glPopMatrix();
+	glEndList();
 
-	// create the axes:
 	AxesList = glGenLists(1);
 	glNewList(AxesList, GL_COMPILE);
 	glLineWidth(AXES_WIDTH);
@@ -853,9 +676,7 @@ InitLists()
 	glEndList();
 }
 
-
 // the keyboard callback:
-
 void
 Keyboard(unsigned char c, int x, int y)
 {
@@ -864,49 +685,44 @@ Keyboard(unsigned char c, int x, int y)
 
 	switch (c)
 	{
-	case '0':
-		Light0On = !Light0On;
-		break;
-	case '1':
-		Light1On = !Light1On;
-		break;
-	case '2':
-		Light2On = !Light2On;
-		break;
-	case 'f': case 'F':
-		Freeze = !Freeze;
-		if (Freeze) glutIdleFunc(NULL);
-		else glutIdleFunc(Animate);
-		break;
-
 	case 'o':
 	case 'O':
 		WhichProjection = ORTHO;
 		break;
-
 	case 'p':
 	case 'P':
 		WhichProjection = PERSP;
 		break;
-
+	case 'f':
+		Freeze = !Freeze;
+		if (Freeze)
+			glutIdleFunc(NULL);
+		else
+			glutIdleFunc(Animate);
+		break;
+	case 'b':
+		fragPattern = TRUE;
+		vertPattern = TRUE;
+		break;
+	case 'F':
+		fragPattern = !fragPattern;
+		break;
+	case 'V':
+		vertPattern = !vertPattern;
+		break;
 	case 'q':
 	case 'Q':
 	case ESCAPE:
-		DoMainMenu(QUIT);	// will not return here
-		break;				// happy compiler
+		DoMainMenu(QUIT);
+		break;			
 
 	default:
-		fprintf(stderr, "Don't know what to do with keyboard hit: '%c' (0x%0x)\n", c, c);
+		fprintf(stderr, "AHHHH: '%c' (0x%0x)\n", c, c);
 	}
-
-	// force a call to Display( ):
 
 	glutSetWindow(MainWindow);
 	glutPostRedisplay();
 }
-
-
-// called when the mouse button transitions down or up:
 
 void
 MouseButton(int button, int state, int x, int y)
@@ -915,8 +731,6 @@ MouseButton(int button, int state, int x, int y)
 
 	if (DebugOn != 0)
 		fprintf(stderr, "MouseButton: %d, %d, %d, %d\n", button, state, x, y);
-
-	// get the proper button bit mask:
 
 	switch (button)
 	{
@@ -943,12 +757,12 @@ MouseButton(int button, int state, int x, int y)
 			Scale = MINSCALE;
 		break;
 
+
 	default:
 		b = 0;
 		fprintf(stderr, "Unknown mouse button: %d\n", button);
 	}
 
-	// button down sets the bit, up clears the bit:
 
 	if (state == GLUT_DOWN)
 	{
@@ -960,10 +774,6 @@ MouseButton(int button, int state, int x, int y)
 	{
 		ActiveButton &= ~b;		// clear the proper bit
 	}
-
-	glutSetWindow(MainWindow);
-	glutPostRedisplay();
-
 }
 
 
@@ -975,6 +785,7 @@ MouseMotion(int x, int y)
 	if (DebugOn != 0)
 		fprintf(stderr, "MouseMotion: %d, %d\n", x, y);
 
+
 	int dx = x - Xmouse;		// change in mouse coords
 	int dy = y - Ymouse;
 
@@ -984,11 +795,10 @@ MouseMotion(int x, int y)
 		Yrot += (ANGFACT * dx);
 	}
 
+
 	if ((ActiveButton & MIDDLE) != 0)
 	{
 		Scale += SCLFACT * (float)(dx - dy);
-
-		// keep object from turning inside-out or disappearing:
 
 		if (Scale < MINSCALE)
 			Scale = MINSCALE;
@@ -1012,15 +822,11 @@ Reset()
 	ActiveButton = 0;
 	AxesOn = 1;
 	DebugOn = 0;
-	DepthBufferOn = 1;
-	DepthFightingOn = 0;
 	DepthCueOn = 0;
 	Scale = 1.0;
 	WhichColor = WHITE;
 	WhichProjection = PERSP;
 	Xrot = Yrot = 0.;
-	Light0On = 1; Light1On = 1; Light2On = 1;
-	Freeze = 0;
 }
 
 
@@ -1032,15 +838,9 @@ Resize(int width, int height)
 	if (DebugOn != 0)
 		fprintf(stderr, "ReSize: %d, %d\n", width, height);
 
-	// don't really need to do anything since the window size is
-	// checked each time in Display( ):
-
 	glutSetWindow(MainWindow);
 	glutPostRedisplay();
 }
-
-
-// handle a change to the window's visibility:
 
 void
 Visibility(int state)
@@ -1053,55 +853,46 @@ Visibility(int state)
 		glutSetWindow(MainWindow);
 		glutPostRedisplay();
 	}
-	else
-	{
-		// could optimize by keeping track of the fact
-		// that the window is not visible and avoid
-		// animating or redrawing it ...
-	}
 }
 
 
 
-///////////////////////////////////////   HANDY UTILITIES:  //////////////////////////
-
-
-// the stroke characters 'X' 'Y' 'Z' :
+// UTILITIES: 
 
 static float xx[] = {
-		0.f, 1.f, 0.f, 1.f
+	0.f, 1.f, 0.f, 1.f
 };
 
 static float xy[] = {
-		-.5f, .5f, .5f, -.5f
+	-.5f, .5f, .5f, -.5f
 };
 
 static int xorder[] = {
-		1, 2, -3, 4
+	1, 2, -3, 4
 };
 
 static float yx[] = {
-		0.f, 0.f, -.5f, .5f
+	0.f, 0.f, -.5f, .5f
 };
 
 static float yy[] = {
-		0.f, .6f, 1.f, 1.f
+	0.f, .6f, 1.f, 1.f
 };
 
 static int yorder[] = {
-		1, 2, 3, -2, 4
+	1, 2, 3, -2, 4
 };
 
 static float zx[] = {
-		1.f, 0.f, 1.f, 0.f, .25f, .75f
+	1.f, 0.f, 1.f, 0.f, .25f, .75f
 };
 
 static float zy[] = {
-		.5f, .5f, -.5f, -.5f, 0.f, 0.f
+	.5f, .5f, -.5f, -.5f, 0.f, 0.f
 };
 
 static int zorder[] = {
-		1, 2, 3, 4, -5, 6
+	1, 2, 3, 4, -5, 6
 };
 
 // fraction of the length to use as height of the characters:
@@ -1179,239 +970,6 @@ Axes(float length)
 
 }
 
-// read a BMP file into a Texture:
-
-#define VERBOSE		false
-#define BMP_MAGIC_NUMBER	0x4d42
-#ifndef BI_RGB
-#define BI_RGB			0
-#define BI_RLE8			1
-#define BI_RLE4			2
-#endif
-
-
-// bmp file header:
-struct bmfh
-{
-	short bfType;		// BMP_MAGIC_NUMBER = "BM"
-	int bfSize;		// size of this file in bytes
-	short bfReserved1;
-	short bfReserved2;
-	int bfOffBytes;		// # bytes to get to the start of the per-pixel data
-} FileHeader;
-
-// bmp info header:
-struct bmih
-{
-	int biSize;		// info header size, should be 40
-	int biWidth;		// image width
-	int biHeight;		// image height
-	short biPlanes;		// #color planes, should be 1
-	short biBitCount;	// #bits/pixel, should be 1, 4, 8, 16, 24, 32
-	int biCompression;	// BI_RGB, BI_RLE4, BI_RLE8
-	int biSizeImage;
-	int biXPixelsPerMeter;
-	int biYPixelsPerMeter;
-	int biClrUsed;		// # colors in the palette
-	int biClrImportant;
-} InfoHeader;
-
-// read a BMP file into a Texture:
-unsigned char*
-BmpToTexture(char* filename, int* width, int* height)
-{
-	FILE* fp = fopen(filename, "rb");
-	if (fp == NULL)
-	{
-		fprintf(stderr, "Cannot open Bmp file '%s'\n", filename);
-		return NULL;
-	}
-
-	FileHeader.bfType = ReadShort(fp);
-
-
-	// if bfType is not BMP_MAGIC_NUMBER, the file is not a bmp:
-
-	if (VERBOSE) fprintf(stderr, "FileHeader.bfType = 0x%0x = \"%c%c\"\n",
-		FileHeader.bfType, FileHeader.bfType & 0xff, (FileHeader.bfType >> 8) & 0xff);
-	if (FileHeader.bfType != BMP_MAGIC_NUMBER)
-	{
-		fprintf(stderr, "Wrong type of file: 0x%0x\n", FileHeader.bfType);
-		fclose(fp);
-		return NULL;
-	}
-
-
-	FileHeader.bfSize = ReadInt(fp);
-	if (VERBOSE)	fprintf(stderr, "FileHeader.bfSize = %d\n", FileHeader.bfSize);
-
-	FileHeader.bfReserved1 = ReadShort(fp);
-	FileHeader.bfReserved2 = ReadShort(fp);
-
-	FileHeader.bfOffBytes = ReadInt(fp);
-	if (VERBOSE)	fprintf(stderr, "FileHeader.bfOffBytes = %d\n", FileHeader.bfOffBytes);
-
-
-	InfoHeader.biSize = ReadInt(fp);
-	if (VERBOSE)	fprintf(stderr, "InfoHeader.biSize = %d\n", InfoHeader.biSize);
-	InfoHeader.biWidth = ReadInt(fp);
-	if (VERBOSE)	fprintf(stderr, "InfoHeader.biWidth = %d\n", InfoHeader.biWidth);
-	InfoHeader.biHeight = ReadInt(fp);
-	if (VERBOSE)	fprintf(stderr, "InfoHeader.biHeight = %d\n", InfoHeader.biHeight);
-
-	const int nums = InfoHeader.biWidth;
-	const int numt = InfoHeader.biHeight;
-
-	InfoHeader.biPlanes = ReadShort(fp);
-	if (VERBOSE)	fprintf(stderr, "InfoHeader.biPlanes = %d\n", InfoHeader.biPlanes);
-
-	InfoHeader.biBitCount = ReadShort(fp);
-	if (VERBOSE)	fprintf(stderr, "InfoHeader.biBitCount = %d\n", InfoHeader.biBitCount);
-
-	InfoHeader.biCompression = ReadInt(fp);
-	if (VERBOSE)	fprintf(stderr, "InfoHeader.biCompression = %d\n", InfoHeader.biCompression);
-
-	InfoHeader.biSizeImage = ReadInt(fp);
-	if (VERBOSE)	fprintf(stderr, "InfoHeader.biSizeImage = %d\n", InfoHeader.biSizeImage);
-
-	InfoHeader.biXPixelsPerMeter = ReadInt(fp);
-	InfoHeader.biYPixelsPerMeter = ReadInt(fp);
-
-	InfoHeader.biClrUsed = ReadInt(fp);
-	if (VERBOSE)	fprintf(stderr, "InfoHeader.biClrUsed = %d\n", InfoHeader.biClrUsed);
-
-	InfoHeader.biClrImportant = ReadInt(fp);
-
-
-	// fprintf( stderr, "Image size found: %d x %d\n", ImageWidth, ImageHeight );
-
-
-	// pixels will be stored bottom-to-top, left-to-right:
-	unsigned char* texture = new unsigned char[3 * nums * numt];
-	if (texture == NULL)
-	{
-		fprintf(stderr, "Cannot allocate the texture array!\n");
-		return NULL;
-	}
-
-
-	// extra padding bytes:
-
-	int requiredRowSizeInBytes = 4 * ((InfoHeader.biBitCount * InfoHeader.biWidth + 31) / 32);
-	if (VERBOSE)	fprintf(stderr, "requiredRowSizeInBytes = %d\n", requiredRowSizeInBytes);
-
-	int myRowSizeInBytes = (InfoHeader.biBitCount * InfoHeader.biWidth + 7) / 8;
-	if (VERBOSE)	fprintf(stderr, "myRowSizeInBytes = %d\n", myRowSizeInBytes);
-
-	int oldNumExtra = 4 * (((3 * InfoHeader.biWidth) + 3) / 4) - 3 * InfoHeader.biWidth;
-	if (VERBOSE)	fprintf(stderr, "Old NumExtra padding = %d\n", oldNumExtra);
-
-	int numExtra = requiredRowSizeInBytes - myRowSizeInBytes;
-	if (VERBOSE)	fprintf(stderr, "New NumExtra padding = %d\n", numExtra);
-
-
-	// this function does not support compression:
-
-	if (InfoHeader.biCompression != 0)
-	{
-		fprintf(stderr, "Wrong type of image compression: %d\n", InfoHeader.biCompression);
-		fclose(fp);
-		return NULL;
-	}
-
-
-	// we can handle 24 bits of direct color:
-	if (InfoHeader.biBitCount == 24)
-	{
-		rewind(fp);
-		fseek(fp, FileHeader.bfOffBytes, SEEK_SET);
-		int t;
-		unsigned char* tp;
-		for (t = 0, tp = texture; t < numt; t++)
-		{
-			for (int s = 0; s < nums; s++, tp += 3)
-			{
-				*(tp + 2) = fgetc(fp);		// b
-				*(tp + 1) = fgetc(fp);		// g
-				*(tp + 0) = fgetc(fp);		// r
-			}
-
-			for (int e = 0; e < numExtra; e++)
-			{
-				fgetc(fp);
-			}
-		}
-	}
-
-	// we can also handle 8 bits of indirect color:
-	if (InfoHeader.biBitCount == 8 && InfoHeader.biClrUsed == 256)
-	{
-		struct rgba32
-		{
-			unsigned char r, g, b, a;
-		};
-		struct rgba32* colorTable = new struct rgba32[InfoHeader.biClrUsed];
-
-		rewind(fp);
-		fseek(fp, sizeof(struct bmfh) + InfoHeader.biSize - 2, SEEK_SET);
-		for (int c = 0; c < InfoHeader.biClrUsed; c++)
-		{
-			colorTable[c].r = fgetc(fp);
-			colorTable[c].g = fgetc(fp);
-			colorTable[c].b = fgetc(fp);
-			colorTable[c].a = fgetc(fp);
-			if (VERBOSE)	fprintf(stderr, "%4d:\t0x%02x\t0x%02x\t0x%02x\t0x%02x\n",
-				c, colorTable[c].r, colorTable[c].g, colorTable[c].b, colorTable[c].a);
-		}
-
-		rewind(fp);
-		fseek(fp, FileHeader.bfOffBytes, SEEK_SET);
-		int t;
-		unsigned char* tp;
-		for (t = 0, tp = texture; t < numt; t++)
-		{
-			for (int s = 0; s < nums; s++, tp += 3)
-			{
-				int index = fgetc(fp);
-				*(tp + 0) = colorTable[index].r;	// r
-				*(tp + 1) = colorTable[index].g;	// g
-				*(tp + 2) = colorTable[index].b;	// b
-			}
-
-			for (int e = 0; e < numExtra; e++)
-			{
-				fgetc(fp);
-			}
-		}
-
-		delete[] colorTable;
-	}
-
-	fclose(fp);
-
-	*width = nums;
-	*height = numt;
-	return texture;
-}
-
-int
-ReadInt(FILE* fp)
-{
-	const unsigned char b0 = fgetc(fp);
-	const unsigned char b1 = fgetc(fp);
-	const unsigned char b2 = fgetc(fp);
-	const unsigned char b3 = fgetc(fp);
-	return (b3 << 24) | (b2 << 16) | (b1 << 8) | b0;
-}
-
-short
-ReadShort(FILE* fp)
-{
-	const unsigned char b0 = fgetc(fp);
-	const unsigned char b1 = fgetc(fp);
-	return (b1 << 8) | b0;
-}
-
 
 // function to convert HSV to RGB
 // 0.  <=  s, v, r, g, b  <=  1.
@@ -1450,13 +1008,13 @@ HsvRgb(float hsv[3], float rgb[3])
 
 	// get an rgb from the hue itself:
 
-	float i = (float)floor(h);
+	float i = floor(h);
 	float f = h - i;
 	float p = v * (1.f - s);
 	float q = v * (1.f - s * f);
 	float t = v * (1.f - (s * (1.f - f)));
 
-	float r = 0., g = 0., b = 0.;			// red, green, blue
+	float r, g, b;			// red, green, blue
 	switch ((int)i)
 	{
 	case 0:
@@ -1484,13 +1042,17 @@ HsvRgb(float hsv[3], float rgb[3])
 		break;
 	}
 
+
 	rgb[0] = r;
 	rgb[1] = g;
 	rgb[2] = b;
 }
 
-void
-Cross(float v1[3], float v2[3], float vout[3])
+float Dot(float v1[3], float v2[3])
+{
+	return v1[0] * v2[0] + v1[1] * v2[1] + v1[2] * v2[2];
+}
+void Cross(float v1[3], float v2[3], float vout[3])
 {
 	float tmp[3];
 	tmp[0] = v1[1] * v2[2] - v2[1] * v1[2];
@@ -1500,20 +1062,12 @@ Cross(float v1[3], float v2[3], float vout[3])
 	vout[1] = tmp[1];
 	vout[2] = tmp[2];
 }
-
-float
-Dot(float v1[3], float v2[3])
-{
-	return v1[0] * v2[0] + v1[1] * v2[1] + v1[2] * v2[2];
-}
-
-float
-Unit(float vin[3], float vout[3])
+float Unit(float vin[3], float vout[3])
 {
 	float dist = vin[0] * vin[0] + vin[1] * vin[1] + vin[2] * vin[2];
 	if (dist > 0.0)
 	{
-		dist = sqrtf(dist);
+		dist = sqrt(dist);
 		vout[0] = vin[0] / dist;
 		vout[1] = vin[1] / dist;
 		vout[2] = vin[2] / dist;
@@ -1527,6 +1081,30 @@ Unit(float vin[3], float vout[3])
 	return dist;
 }
 
+// utility to create an array from 3 separate values:
+float*
+Array3(float a, float b, float c)
+{
+	static float array[4];
+	array[0] = a;
+	array[1] = b;
+	array[2] = c;
+	array[3] = 1.;
+	return array;
+}
+
+// utility to create an array from a multiplier and an array:
+float*
+MulArray3(float factor, float array0[3])
+{
+	static float array[4];
+	array[0] = factor * array0[0];
+	array[1] = factor * array0[1];
+	array[2] = factor * array0[2];
+	array[3] = 1.;
+	return array;
+}
+
 void
 SetMaterial(float r, float g, float b, float shininess)
 {
@@ -1534,15 +1112,13 @@ SetMaterial(float r, float g, float b, float shininess)
 	glMaterialfv(GL_BACK, GL_AMBIENT, MulArray3(.4f, White));
 	glMaterialfv(GL_BACK, GL_DIFFUSE, MulArray3(1., White));
 	glMaterialfv(GL_BACK, GL_SPECULAR, Array3(0., 0., 0.));
-	glMaterialf(GL_BACK, GL_SHININESS, 5.f);
-
+	glMaterialf(GL_BACK, GL_SHININESS, 2.f);
 	glMaterialfv(GL_FRONT, GL_EMISSION, Array3(0., 0., 0.));
 	glMaterialfv(GL_FRONT, GL_AMBIENT, Array3(r, g, b));
 	glMaterialfv(GL_FRONT, GL_DIFFUSE, Array3(r, g, b));
 	glMaterialfv(GL_FRONT, GL_SPECULAR, MulArray3(.8f, White));
 	glMaterialf(GL_FRONT, GL_SHININESS, shininess);
 }
-
 
 void
 SetPointLight(int ilight, float x, float y, float z, float r, float g, float b)
@@ -1552,7 +1128,7 @@ SetPointLight(int ilight, float x, float y, float z, float r, float g, float b)
 	glLightfv(ilight, GL_DIFFUSE, Array3(r, g, b));
 	glLightfv(ilight, GL_SPECULAR, Array3(r, g, b));
 	glLightf(ilight, GL_CONSTANT_ATTENUATION, 1.);
-	glLightf(ilight, GL_LINEAR_ATTENUATION, 0.);
+	glLightf(ilight, GL_LINEAR_ATTENUATION, 0.5);
 	glLightf(ilight, GL_QUADRATIC_ATTENUATION, 0.);
 	glEnable(ilight);
 }
@@ -1563,178 +1139,12 @@ SetSpotLight(int ilight, float x, float y, float z, float xdir, float ydir, floa
 	glLightfv(ilight, GL_POSITION, Array3(x, y, z));
 	glLightfv(ilight, GL_SPOT_DIRECTION, Array3(xdir, ydir, zdir));
 	glLightf(ilight, GL_SPOT_EXPONENT, 1.);
-	glLightf(ilight, GL_SPOT_CUTOFF, 45.);
+	glLightf(ilight, GL_SPOT_CUTOFF, 20.);
 	glLightfv(ilight, GL_AMBIENT, Array3(0., 0., 0.));
 	glLightfv(ilight, GL_DIFFUSE, Array3(r, g, b));
 	glLightfv(ilight, GL_SPECULAR, Array3(r, g, b));
 	glLightf(ilight, GL_CONSTANT_ATTENUATION, 1.);
 	glLightf(ilight, GL_LINEAR_ATTENUATION, 0.);
-	glLightf(ilight, GL_QUADRATIC_ATTENUATION, 0.);
+	glLightf(ilight, GL_QUADRATIC_ATTENUATION, 0.1);
 	glEnable(ilight);
-}
-
-float*
-Array3(float a, float b, float c)
-{
-	static float array[4];
-
-	array[0] = a;
-	array[1] = b;
-	array[2] = c;
-	array[3] = 1.;
-	return array;
-}
-
-float*
-Array4(float a, float b, float c, float d)
-{
-	static float array[4];
-
-	array[0] = a;
-	array[1] = b;
-	array[2] = c;
-	array[3] = d;
-	return array;
-}
-
-float*
-BlendArray3(float factor, float array0[3], float array1[3])
-{
-	static float array[4];
-
-	array[0] = factor * array0[0] + (1.f - factor) * array1[0];
-	array[1] = factor * array0[1] + (1.f - factor) * array1[1];
-	array[2] = factor * array0[2] + (1.f - factor) * array1[2];
-	array[3] = 1.;
-	return array;
-}
-
-float*
-MulArray3(float factor, float array0[3])
-{
-	static float array[4];
-
-	array[0] = factor * array0[0];
-	array[1] = factor * array0[1];
-	array[2] = factor * array0[2];
-	array[3] = 1.;
-	return array;
-}
-
-inline
-void
-DrawPoint(struct point* p)
-{
-	glNormal3fv(&p->nx);
-	glTexCoord2fv(&p->s);
-	glVertex3fv(&p->x);
-}
-
-void
-Sphere(float radius, int slices, int stacks, int xpos, int ypos, int zpos)
-{
-	// set the globals:
-
-	NumLngs = SPHERE_SLICES;
-	NumLats = SPHERE_STACKS;
-	if (NumLngs < 3)
-		NumLngs = 3;
-	if (NumLats < 3)
-		NumLats = 3;
-
-	// allocate the point data structure:
-
-	Pts = new struct point[NumLngs * NumLats];
-
-	// fill the Pts structure:
-
-	for (int ilat = 0; ilat < NumLats; ilat++)
-	{
-		float lat = -M_PI / 2. + M_PI * (float)ilat / (float)(NumLats - 1);	// ilat=0/lat=0. is the south pole
-											// ilat=NumLats-1, lat=+M_PI/2. is the north pole
-		float xz = cosf(lat);
-		float  y = sinf(lat) + ypos;
-		for (int ilng = 0; ilng < NumLngs; ilng++)				// ilng=0, lng=-M_PI and
-											// ilng=NumLngs-1, lng=+M_PI are the same meridian
-		{
-			float lng = -M_PI + 2. * M_PI * (float)ilng / (float)(NumLngs - 1);
-			float x = (xz * cosf(lng)) + xpos;
-			float z = (-xz * sinf(lng)) + zpos;
-			struct point* p = PtsPointer(ilat, ilng);
-			p->x = (radius * x);
-			p->y = (radius * y);
-			p->z = (radius * z);
-			p->nx = x;
-			p->ny = y;
-			p->nz = z;
-
-			if (TurnDistortionOn)
-			{
-				p->s = (lng + cosf(2 * M_PI * (TimeInterval + (float)ilat / (float)NumLats)) + M_PI / 2.) / M_PI;
-				p->t = (lat + sinf(2 * M_PI * (TimeInterval + (float)ilng / (float)NumLngs)) + M_PI / 2.) / M_PI;
-			}
-			else
-			{
-				p->s = (lng + M_PI) / (2. * M_PI);
-				p->t = (lat + M_PI / 2.) / M_PI;
-			}
-		}
-	}
-
-	struct point top, bot;		// top, bottom points
-
-	top.x = (float)xpos;		top.y = radius + (float)ypos;	top.z = (float)zpos;
-	top.nx = 0.;		top.ny = 1.;		top.nz = 0.;
-	top.s = 0.;		top.t = 1.;
-
-	bot.x = (float)xpos;		bot.y = -radius + (float)ypos;	bot.z = (float)zpos;
-	bot.nx = 0.;		bot.ny = -1.;		bot.nz = 0.;
-	bot.s = 0.;		bot.t = 0.;
-
-	// connect the north pole to the latitude NumLats-2:
-
-	glBegin(GL_TRIANGLE_STRIP);
-	for (int ilng = 0; ilng < NumLngs; ilng++)
-	{
-		float lng = -M_PI + 2. * M_PI * (float)ilng / (float)(NumLngs - 1);
-		top.s = (lng + M_PI) / (2. * M_PI);
-		DrawPoint(&top);
-		struct point* p = PtsPointer(NumLats - 2, ilng);	// ilat=NumLats-1 is the north pole
-		DrawPoint(p);
-	}
-	glEnd();
-
-	// connect the south pole to the latitude 1:
-
-	glBegin(GL_TRIANGLE_STRIP);
-	for (int ilng = NumLngs - 1; ilng >= 0; ilng--)
-	{
-		float lng = -M_PI + 2. * M_PI * (float)ilng / (float)(NumLngs - 1);
-		bot.s = (lng + M_PI) / (2. * M_PI);
-		DrawPoint(&bot);
-		struct point* p = PtsPointer(1, ilng);					// ilat=0 is the south pole
-		DrawPoint(p);
-	}
-	glEnd();
-
-	// connect the horizontal strips:
-
-	for (int ilat = 2; ilat < NumLats - 1; ilat++)
-	{
-		struct point* p;
-		glBegin(GL_TRIANGLE_STRIP);
-		for (int ilng = 0; ilng < NumLngs; ilng++)
-		{
-			p = PtsPointer(ilat, ilng);
-			DrawPoint(p);
-			p = PtsPointer(ilat - 1, ilng);
-			DrawPoint(p);
-		}
-		glEnd();
-	}
-
-	// clean-up:
-
-	delete[] Pts;
-	Pts = NULL;
 }

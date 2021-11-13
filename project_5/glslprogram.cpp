@@ -150,8 +150,6 @@ GLSLProgram::CreateHelper(char* file0, ...)
 			}
 		}
 
-		GLuint shader;
-		bool SkipToNextVararg = false;
 		if (type < 0)
 		{
 			fprintf(stderr, "Unknown filename extension: '%s'\n", extension);
@@ -169,184 +167,163 @@ GLSLProgram::CreateHelper(char* file0, ...)
 			}
 			fprintf(stderr, "\n");
 			Valid = false;
-			SkipToNextVararg = true;
+			goto cont;
 		}
 
-		if (!SkipToNextVararg)
+		GLuint shader;
+		switch (ShaderTypes[type].name)
 		{
-			switch (ShaderTypes[type].name)
+		case GL_COMPUTE_SHADER:
+			if (!CanDoComputeShaders)
 			{
-			case GL_COMPUTE_SHADER:
-				if (!CanDoComputeShaders)
-				{
-					fprintf(stderr, "Warning: this system cannot handle compute shaders\n");
-					Valid = false;
-					SkipToNextVararg = true;
-				}
-				else
-				{
-					shader = glCreateShader(GL_COMPUTE_SHADER);
-				}
-				break;
-
-			case GL_VERTEX_SHADER:
-				if (!CanDoVertexShaders)
-				{
-					fprintf(stderr, "Warning: this system cannot handle vertex shaders\n");
-					Valid = false;
-					SkipToNextVararg = true;
-				}
-				else
-				{
-					shader = glCreateShader(GL_VERTEX_SHADER);
-				}
-				break;
-
-			case GL_TESS_CONTROL_SHADER:
-				if (!CanDoTessControlShaders)
-				{
-					fprintf(stderr, "Warning: this system cannot handle tessellation control shaders\n");
-					Valid = false;
-					SkipToNextVararg = true;
-				}
-				else
-				{
-					shader = glCreateShader(GL_TESS_CONTROL_SHADER);
-				}
-				break;
-
-			case GL_TESS_EVALUATION_SHADER:
-				if (!CanDoTessEvaluationShaders)
-				{
-					fprintf(stderr, "Warning: this system cannot handle tessellation evaluation shaders\n");
-					Valid = false;
-					SkipToNextVararg = true;
-				}
-				else
-				{
-					shader = glCreateShader(GL_TESS_EVALUATION_SHADER);
-				}
-				break;
-
-			case GL_GEOMETRY_SHADER:
-				if (!CanDoGeometryShaders)
-				{
-					fprintf(stderr, "Warning: this system cannot handle geometry shaders\n");
-					Valid = false;
-					SkipToNextVararg = true;
-				}
-				else
-				{
-					//glProgramParameteriEXT( Program, GL_GEOMETRY_INPUT_TYPE_EXT,  InputTopology );
-					//glProgramParameteriEXT( Program, GL_GEOMETRY_OUTPUT_TYPE_EXT, OutputTopology );
-					//glProgramParameteriEXT( Program, GL_GEOMETRY_VERTICES_OUT_EXT, 1024 );
-					shader = glCreateShader(GL_GEOMETRY_SHADER);
-				}
-				break;
-
-			case GL_FRAGMENT_SHADER:
-				if (!CanDoFragmentShaders)
-				{
-					fprintf(stderr, "Warning: this system cannot handle fragment shaders\n");
-					Valid = false;
-					SkipToNextVararg = true;
-				}
-				else
-				{
-					shader = glCreateShader(GL_FRAGMENT_SHADER);
-				}
-				break;
+				fprintf(stderr, "Warning: this system cannot handle compute shaders\n");
+				Valid = false;
+				goto cont;
 			}
+			shader = glCreateShader(GL_COMPUTE_SHADER);
+			break;
+
+		case GL_VERTEX_SHADER:
+			if (!CanDoVertexShaders)
+			{
+				fprintf(stderr, "Warning: this system cannot handle vertex shaders\n");
+				Valid = false;
+				goto cont;
+			}
+			shader = glCreateShader(GL_VERTEX_SHADER);
+			break;
+
+		case GL_TESS_CONTROL_SHADER:
+			if (!CanDoTessControlShaders)
+			{
+				fprintf(stderr, "Warning: this system cannot handle tessellation control shaders\n");
+				Valid = false;
+				goto cont;
+			}
+			shader = glCreateShader(GL_TESS_CONTROL_SHADER);
+			break;
+
+		case GL_TESS_EVALUATION_SHADER:
+			if (!CanDoTessEvaluationShaders)
+			{
+				fprintf(stderr, "Warning: this system cannot handle tessellation evaluation shaders\n");
+				Valid = false;
+				goto cont;
+			}
+			shader = glCreateShader(GL_TESS_EVALUATION_SHADER);
+			break;
+
+		case GL_GEOMETRY_SHADER:
+			if (!CanDoGeometryShaders)
+			{
+				fprintf(stderr, "Warning: this system cannot handle geometry shaders\n");
+				Valid = false;
+				goto cont;
+			}
+			//glProgramParameteriEXT( Program, GL_GEOMETRY_INPUT_TYPE_EXT,  InputTopology );
+			//glProgramParameteriEXT( Program, GL_GEOMETRY_OUTPUT_TYPE_EXT, OutputTopology );
+			//glProgramParameteriEXT( Program, GL_GEOMETRY_VERTICES_OUT_EXT, 1024 );
+			shader = glCreateShader(GL_GEOMETRY_SHADER);
+			break;
+
+		case GL_FRAGMENT_SHADER:
+			if (!CanDoFragmentShaders)
+			{
+				fprintf(stderr, "Warning: this system cannot handle fragment shaders\n");
+				Valid = false;
+				goto cont;
+			}
+			shader = glCreateShader(GL_FRAGMENT_SHADER);
+			break;
 		}
 
 
 		// read the shader source into a buffer:
 
-		if (!SkipToNextVararg)
+		FILE* in;
+		int length;
+		FILE* logfile;
+
+		in = fopen(file, "rb");
+		if (in == NULL)
 		{
-			FILE* in;
-			int length;
-			FILE* logfile;
+			fprintf(stderr, "Cannot open shader file '%s'\n", file);
+			Valid = false;
+			goto cont;
+		}
 
-			in = fopen(file, "rb");
-			if (in == NULL)
+		fseek(in, 0, SEEK_END);
+		length = ftell(in);
+		fseek(in, 0, SEEK_SET);		// rewind
+
+		buf = new GLchar[length + 1];
+		fread(buf, sizeof(GLchar), length, in);
+		buf[length] = '\0';
+		fclose(in);
+
+		GLchar* strings[2];
+		{
+			int n = 0;
+
+			if (IncludeGstap)
 			{
-				fprintf(stderr, "Cannot open shader file '%s'\n", file);
-				Valid = false;
-				SkipToNextVararg = true;
-			}
-
-			if (!SkipToNextVararg)
-			{
-				fseek(in, 0, SEEK_END);
-				length = ftell(in);
-				fseek(in, 0, SEEK_SET);		// rewind
-
-				buf = new GLchar[length + 1];
-				fread(buf, sizeof(GLchar), length, in);
-				buf[length] = '\0';
-				fclose(in);
-
-				GLchar* strings[2];
-				int n = 0;
-
-				if (IncludeGstap)
-				{
-					strings[n] = Gstap;
-					n++;
-				}
-
-				strings[n] = buf;
+				strings[n] = Gstap;
 				n++;
-
-				// Tell GL about the source:
-
-				glShaderSource(shader, n, (const GLchar**)strings, NULL);
-				delete[] buf;
-				CheckGlErrors("Shader Source");
-
-				// compile:
-
-				glCompileShader(shader);
-				GLint infoLogLen;
-				GLint compileStatus;
-				CheckGlErrors("CompileShader:");
-				glGetShaderiv(shader, GL_COMPILE_STATUS, &compileStatus);
-
-				if (compileStatus == 0)
-				{
-					fprintf(stderr, "Shader '%s' did not compile.\n", file);
-					glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &infoLogLen);
-					if (infoLogLen > 0)
-					{
-						GLchar* infoLog = new GLchar[infoLogLen + 1];
-						glGetShaderInfoLog(shader, infoLogLen, NULL, infoLog);
-						infoLog[infoLogLen] = '\0';
-						logfile = fopen("glsllog.txt", "w");
-						if (logfile != NULL)
-						{
-							fprintf(logfile, "\n%s\n", infoLog);
-							fclose(logfile);
-						}
-						fprintf(stderr, "\n%s\n", infoLog);
-						delete[] infoLog;
-					}
-					glDeleteShader(shader);
-					Valid = false;
-				}
-				else
-				{
-					if (Verbose)
-						fprintf(stderr, "Shader '%s' compiled.\n", file);
-
-					glAttachShader(this->Program, shader);
-				}
 			}
+
+			strings[n] = buf;
+			n++;
+
+			// Tell GL about the source:
+
+			glShaderSource(shader, n, (const GLchar**)strings, NULL);
+			delete[] buf;
+			CheckGlErrors("Shader Source");
+
+		}
+
+		// compile:
+
+		glCompileShader(shader);
+		GLint infoLogLen;
+		GLint compileStatus;
+		CheckGlErrors("CompileShader:");
+		glGetShaderiv(shader, GL_COMPILE_STATUS, &compileStatus);
+
+		if (compileStatus == 0)
+		{
+			fprintf(stderr, "Shader '%s' did not compile.\n", file);
+			glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &infoLogLen);
+			if (infoLogLen > 0)
+			{
+				GLchar* infoLog = new GLchar[infoLogLen + 1];
+				glGetShaderInfoLog(shader, infoLogLen, NULL, infoLog);
+				infoLog[infoLogLen] = '\0';
+				logfile = fopen("glsllog.txt", "w");
+				if (logfile != NULL)
+				{
+					fprintf(logfile, "\n%s\n", infoLog);
+					fclose(logfile);
+				}
+				fprintf(stderr, "\n%s\n", infoLog);
+				delete[] infoLog;
+			}
+			glDeleteShader(shader);
+			Valid = false;
+			goto cont;
+		}
+		else
+		{
+			if (Verbose)
+				fprintf(stderr, "Shader '%s' compiled.\n", file);
+
+			glAttachShader(this->Program, shader);
 		}
 
 
 
-		// go to the next vararg file:
+	cont:
+		// go to the next file:
 
 		file = va_arg(args, char*);
 	}

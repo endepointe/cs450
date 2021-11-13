@@ -15,9 +15,6 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="glslprogram.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="sample.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -29,15 +26,5 @@
     <None Include="pattern.vert">
       <Filter>Source Files</Filter>
     </None>
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="glslprogram.h">
-      <Filter>Source Files</Filter>
-    </ClInclude>
-  </ItemGroup>
-  <ItemGroup>
-    <Image Include="worldtex.bmp">
-      <Filter>Source Files</Filter>
-    </Image>
   </ItemGroup>
 </Project>

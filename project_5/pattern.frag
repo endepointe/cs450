@@ -1,72 +1,48 @@
 #version 330 compatibility
 
-uniform float uKa, uKd, uKs;		// coefficients of each type of lighting
-uniform float uS0, uT0;				// home coordinates; bounding box for pattern
-uniform vec3  uColor;			    // object color
-uniform vec3  uSpecularColor;		// light color
-uniform float uShininess;		    // specular exponent
-uniform float uSize;
+uniform float uKa, uKd, uKs; // coefficients of each type of lighting
+uniform vec3 uColor; // object color
+uniform vec3 uSpecularColor; // light color
+uniform float uShininess; // specular exponent
 uniform float uTime;
-uniform int uAnimateFragment;		// to animate or not to animate...
+const float PI = 3.14159;
 
-// my wavy vars
-const float PI = 	3.14159265;
-const float AMP = 	1.0;		// amplitude
-const float W = 	2.;		// frequency
+uniform bool fragPattern;
+uniform bool vertPattern;
 
-// input vars
-in  vec2  vST;			// texture coords
-in  vec3  vN;			// normal vector
-in  vec3  vL;			// vector from point to light
-in  vec3  vE;			// vector from point to eye
-
-// stores last known time value; hold state on freeze
-float lastTime;
+in vec2 vST; // texture cords
+in vec3 vN; // normal vector
+in vec3 vL; // vector from point to light
+in vec3 vE; // vector from point to eye
 
 void
 main( )
 {
-	// update time while animation enabled
-	if (uAnimateFragment == 1)
-		lastTime = uTime;
-	else
-		lastTime = 0.5;
+    vec3 Normal = normalize(vN);
+    vec3 Light = normalize(vL);
+    vec3 Eye = normalize(vE);
+    vec3 myColor = uColor;
 
-	vec3 Normal 	= normalize(vN);
-	vec3 Light 		= normalize(vL);
-	vec3 Eye 		= normalize(vE);
-	vec3 myColor 	= uColor;
-
-	// fragment "effect processing" here
-	/* using: 
-	-	vertex coordinates 	(vST) == <s, t>
-	-	home coordinates (uS0, uT0)
-	-	static size (uSize)
-	*/
-
-	float waves = sin(lastTime * PI);
-	float cwaves = cos(lastTime * PI);
-	if (vST.t < sin(W * (vST.s * waves * 2)))
-        myColor = vec3( 1., waves/2, 0. );
-	else
-		myColor = vec3( uColor.x, uColor.y, waves/2);
-
-	// set ambient color
-	vec3 ambient = uKa * myColor;
-
-	// only do diffuse if the light can see the point
-	float d = max( dot(Normal,Light), 0. );
-	vec3 diffuse = uKd * d * myColor;
-
-	// only do specular if the light can see the point
-	float s = 0.;
-	if( dot(Normal,Light) > 0. )
+	if(fragPattern)
 	{
-		vec3 ref = normalize(  reflect( -Light, Normal )  );
-		s = pow( max( dot(Eye,ref),0. ), uShininess );
+		if( vST.s >= .1 && vST.s <= ((cos(uTime * PI))) ) 
+		{
+			myColor = vec3( cos(uTime), cos(5. * uTime), 0 );
+		}
 	}
-	vec3 specular = uKs * s * uSpecularColor;
 
-	// set final fragment color based on sum of all lighting
-	gl_FragColor = vec4( ambient + diffuse + specular,  1. );
+	if(vertPattern)
+	{
+		if( vST.s >= .1 && vST.s <= ((sin(uTime * PI))) ) 
+		{
+			myColor = vec3( cos(5. * uTime),  uTime, 0 );
+		}
+	}
+    vec3 ambient = uKa * myColor;
+    float d = max( dot(Normal,Light), 0. ); //we will only do the diffuse if the light can see the point
+    myColor = uColor;
+    myColor = vec3( .6, .4, .9 );
+
+    vec3 diffuse = uKd * d * myColor;
+    gl_FragColor = vec4( ambient + diffuse, .25 );
 }

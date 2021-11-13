@@ -125,18 +125,11 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="glslprogram.cpp" />
     <ClCompile Include="sample.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="pattern.frag" />
     <None Include="pattern.vert" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="glslprogram.h" />
-  </ItemGroup>
-  <ItemGroup>
-    <Image Include="worldtex.bmp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
