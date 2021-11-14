@@ -51,15 +51,11 @@ const int LEFT = { 4 };
 const int MIDDLE = { 2 };
 const int RIGHT = { 1 };
 
-// which projection:
-
 enum Projections
 {
 	ORTHO,
 	PERSP
 };
-
-// which button:
 
 enum ButtonVals
 {
@@ -166,13 +162,36 @@ float* MulArray3(float, float[3]);
 void SetMaterial(float, float, float, float);
 void SetPointLight(int, float, float, float, float, float, float);
 void SetSpotLight(int, float, float, float, float, float, float, float, float, float);
-
-
 void	Axes(float);
 void	HsvRgb(float[3], float[3]);
+void Sphere(float, int, int, int, int, int);
+#define SPHERE_RADIUS 1
+#define SPHERE_SLICES 20
+#define SPHERE_STACKS 20
 
-#define MS_PER_CYCLE 4000
+const int MS_PER_CYCLE = {4000};
 
+int NumLngs, NumLats;
+
+struct point
+{
+	float x, y, z;		// coordinates
+	float nx, ny, nz;	// surface normal
+	float s, t;		// texture coords
+};
+
+struct point* Pts;
+
+inline
+struct point*
+	PtsPointer(int lat, int lng)
+{
+	if (lat < 0)	lat += (NumLats - 1);
+	if (lng < 0)	lng += (NumLngs - 0);
+	if (lat > NumLats - 1)	lat -= (NumLats - 1);
+	if (lng > NumLngs - 1)	lng -= (NumLngs - 0);
+	return &Pts[NumLngs * lat + lng];
+}
 
 // main program:
 
@@ -336,7 +355,7 @@ Display()
 	float Ds, Dt;
 	float V0, V1, V2;
 	float R, G, B;
-	float specR, specG, specB;
+	float sR, sG, sB;
 	float uKa, uKd, uKs;
 	float pointx, pointy, pointz;
 	float maxdist;
@@ -346,29 +365,35 @@ Display()
 	R = 0.2;
 	G = 0.9;
 	B = 0.2;
-	specR = .9;
-	specG = .2;
-	specB = .9;
+	sR = .9;
+	sG = .2;
+	sB = .9;
 	uKa = 0.6;
 	uKd = 0.6;
 	uKs = 0.6;
-	pointx = M_PI * sin(Time * 20) + 2;
+	pointx = M_PI * sin(Time * 4);
 	pointy = cos(Time * 3.) * 2;
 	pointz = cos(Time * 10.) / 3;
 	maxdist = 6.;
 
 	Pattern->Use();
+	if (vertPattern) 
+	{
+		Pattern->SetUniformVariable("vTime", Time);
+	}
+	if (fragPattern)
+	{
+		Pattern->SetUniformVariable("fTime", Time);
+	}
 	Pattern->SetUniformVariable("uS0", S0);
 	Pattern->SetUniformVariable("uT0", T0);
 	Pattern->SetUniformVariable("uColor", R, G, B);
-	Pattern->SetUniformVariable("uSpecularColor", specR, specG, specB);
+	Pattern->SetUniformVariable("uSpecularColor", sR, sG, sB);
 	Pattern->SetUniformVariable("uKa", uKa);
 	Pattern->SetUniformVariable("uKd", uKd);
 	Pattern->SetUniformVariable("uKs", uKs);
-	Pattern->SetUniformVariable("uTime", Time);
 	Pattern->SetUniformVariable("vertPattern", vertPattern);
 	Pattern->SetUniformVariable("fragPattern", fragPattern);
-
 
 	glShadeModel(GL_SMOOTH);
 
@@ -665,6 +690,7 @@ InitLists()
 	//glTranslatef(2., 3., 3.);
 	glColor3f(.3, .6, .6);
 	glutSolidTeapot(1);
+	//Sphere(1., 10, 10, 0,0,0);
 	glPopMatrix();
 	glEndList();
 
@@ -705,10 +731,12 @@ Keyboard(unsigned char c, int x, int y)
 		vertPattern = TRUE;
 		break;
 	case 'F':
-		fragPattern = !fragPattern;
+		fragPattern = TRUE; 
+		vertPattern = FALSE;
 		break;
 	case 'V':
-		vertPattern = !vertPattern;
+		vertPattern = TRUE; 
+		fragPattern = FALSE;
 		break;
 	case 'q':
 	case 'Q':
@@ -827,6 +855,7 @@ Reset()
 	WhichColor = WHITE;
 	WhichProjection = PERSP;
 	Xrot = Yrot = 0.;
+	Freeze = 0;
 }
 
 
@@ -854,8 +883,6 @@ Visibility(int state)
 		glutPostRedisplay();
 	}
 }
-
-
 
 // UTILITIES: 
 
@@ -1147,4 +1174,111 @@ SetSpotLight(int ilight, float x, float y, float z, float xdir, float ydir, floa
 	glLightf(ilight, GL_LINEAR_ATTENUATION, 0.);
 	glLightf(ilight, GL_QUADRATIC_ATTENUATION, 0.1);
 	glEnable(ilight);
+}
+
+inline
+void
+DrawPoint(struct point* p)
+{
+	glNormal3fv(&p->nx);
+	glTexCoord2fv(&p->s);
+	glVertex3fv(&p->x);
+}
+
+void
+Sphere(float radius, int slices, int stacks, int xpos, int ypos, int zpos)
+{
+	// set the globals:
+
+	NumLngs = SPHERE_SLICES;
+	NumLats = SPHERE_STACKS;
+	if (NumLngs < 3)
+		NumLngs = 3;
+	if (NumLats < 3)
+		NumLats = 3;
+
+	// allocate the point data structure:
+
+	Pts = new struct point[NumLngs * NumLats];
+
+	// fill the Pts structure:
+
+	for (int ilat = 0; ilat < NumLats; ilat++)
+	{
+		float lat = -M_PI / 2. + M_PI * (float)ilat / (float)(NumLats - 1);	// ilat=0/lat=0. is the south pole
+											// ilat=NumLats-1, lat=+M_PI/2. is the north pole
+		float xz = cosf(lat);
+		float  y = sinf(lat) + ypos;
+		for (int ilng = 0; ilng < NumLngs; ilng++)				// ilng=0, lng=-M_PI and
+											// ilng=NumLngs-1, lng=+M_PI are the same meridian
+		{
+			float lng = -M_PI + 2. * M_PI * (float)ilng / (float)(NumLngs - 1);
+			float x = (xz * cosf(lng)) + xpos;
+			float z = (-xz * sinf(lng)) + zpos;
+			struct point* p = PtsPointer(ilat, ilng);
+			p->x = (radius * x);
+			p->y = (radius * y);
+			p->z = (radius * z);
+			p->nx = x;
+			p->ny = y;
+			p->nz = z;
+		}
+	}
+
+	struct point top, bot;		// top, bottom points
+
+	top.x = (float)xpos;		top.y = radius + (float)ypos;	top.z = (float)zpos;
+	top.nx = 0.;		top.ny = 1.;		top.nz = 0.;
+	top.s = 0.;		top.t = 1.;
+
+	bot.x = (float)xpos;		bot.y = -radius + (float)ypos;	bot.z = (float)zpos;
+	bot.nx = 0.;		bot.ny = -1.;		bot.nz = 0.;
+	bot.s = 0.;		bot.t = 0.;
+
+	// connect the north pole to the latitude NumLats-2:
+
+	glBegin(GL_TRIANGLE_STRIP);
+	for (int ilng = 0; ilng < NumLngs; ilng++)
+	{
+		float lng = -M_PI + 2. * M_PI * (float)ilng / (float)(NumLngs - 1);
+		top.s = (lng + M_PI) / (2. * M_PI);
+		DrawPoint(&top);
+		struct point* p = PtsPointer(NumLats - 2, ilng);	// ilat=NumLats-1 is the north pole
+		DrawPoint(p);
+	}
+	glEnd();
+
+	// connect the south pole to the latitude 1:
+
+	glBegin(GL_TRIANGLE_STRIP);
+	for (int ilng = NumLngs - 1; ilng >= 0; ilng--)
+	{
+		float lng = -M_PI + 2. * M_PI * (float)ilng / (float)(NumLngs - 1);
+		bot.s = (lng + M_PI) / (2. * M_PI);
+		DrawPoint(&bot);
+		struct point* p = PtsPointer(1, ilng);					// ilat=0 is the south pole
+		DrawPoint(p);
+	}
+	glEnd();
+
+	// connect the horizontal strips:
+
+	for (int ilat = 2; ilat < NumLats - 1; ilat++)
+	{
+		struct point* p;
+		glBegin(GL_TRIANGLE_STRIP);
+		for (int ilng = 0; ilng < NumLngs; ilng++)
+		{
+			p = PtsPointer(ilat, ilng);
+			DrawPoint(p);
+			p = PtsPointer(ilat - 1, ilng);
+			DrawPoint(p);
+		}
+		glEnd();
+	}
+
+	// clean-up:
+
+	delete[] Pts;
+	Pts = NULL;
 }

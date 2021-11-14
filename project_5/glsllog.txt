@@ -1,6 +1,10 @@
 
-Vertex shader failed to compile with the following errors:
-ERROR: 0:15: error(#132) Syntax error: "?" parse error
-ERROR: error(#273) 1 compilation errors.  No code generated
+Fragment shader failed to compile with the following errors:
+ERROR: 0:13: error(#143) Undeclared identifier: vst
+ERROR: 0:13: error(#143) Undeclared identifier: ftime
+ERROR: 0:13: error(#216) Vector field selection out of range "t"
+ERROR: 0:16: error(#143) Undeclared identifier: myColor
+ERROR: 0:16: error(#174) Not enough data provided for construction constructor
+ERROR: error(#273) 5 compilation errors.  No code generated
 
 
