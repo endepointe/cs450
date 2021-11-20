@@ -16,11 +16,29 @@
 #include "glut.h"
 
 
-//	This is a sample OpenGL / GLUT program
+//	Project 6 - Geometric Modeling - Alvin Johns
 //
-//	The objective is to draw a 3d object and change the color of the axes
-//		with a glut menu
+//	Objective - Model a geometric object that satisfies the following conditions:
+//		- It must be in 3D
+//		- It can be cubics, 2nd, 4th, 5th, nth order
+//		- Must have at least 5 curves
+//		- The curves must somehow be different from each other
+//		- These differnces could mean that the curves are rotated, scaled, have
+//			different points, etc. Translating them is not enough.
 //
+//	Requirements:
+//		1. Create a scene of at least five 3D Bezier curves
+//		2. Make it look like something familiar
+//		3. Must be colored
+//		4. Must be animated
+//		5. Enough points in GL_LINE_STRIP must be used to make the curves look smooth 
+//		6. Animate each curve by changing the position of more than one point per curve
+//				based on time
+//		7. The control points can be turned on and off
+//		8. The control lines can be turned on and off
+//		9. Freeze/unfreeze the animation
+// 
+////////////////////////////////////////
 //	The left mouse button does rotation
 //	The middle mouse button does scaling
 //	The user interface allows:
@@ -31,12 +49,11 @@
 //		5. The projection to be changed
 //		6. The transformations to be reset
 //		7. The program to quit
-//
-//	Author:			Joe Graphics
+//		8. The animation to freeze
 
 // title of these windows:
 
-const char *WINDOWTITLE = { "OpenGL / GLUT Sample -- Joe Graphics" };
+const char *WINDOWTITLE = { "OpenGL / Project 6 - Alvin Johns" };
 const char *GLUITITLE   = { "User Interface Window" };
 
 // what the glui package defines as true and false:
@@ -162,6 +179,22 @@ const GLfloat FOGEND      = { 4. };
 //#define DEMO_Z_FIGHTING
 //#define DEMO_DEPTH_BUFFER
 
+struct Point
+{
+	float x0, y0, z0; // initial coords
+	float x, y, z; // animated coords
+};
+
+struct Curve
+{
+	float r,g,b;
+	Point p0, p1, p2, p3;
+};
+
+const int MS_PER_CYCLE = {4000};
+const int NUMCURVES = 5;
+const int NUMPOINTS = 30;
+
 // non-constant global variables:
 
 int		ActiveButton;			// current button that is down
@@ -174,12 +207,14 @@ int		DepthBufferOn;			// != 0 means to use the z-buffer
 int		DepthFightingOn;		// != 0 means to force the creation of z-fighting
 int		MainWindow;				// window id for main graphics window
 float	Scale;					// scaling factor
-float	Time;					// timer in the range [0.,1.)
+float	Time = 0.;					// timer in the range [0.,1.)
 int		WhichColor;				// index into Colors[ ]
 int		WhichProjection;		// ORTHO or PERSP
 int		Xmouse, Ymouse;			// mouse values
 float	Xrot, Yrot;				// rotation angles in degrees
-
+bool Freeze = TRUE;
+Curve Curves[NUMCURVES];
+Curve Stem; 
 
 // function prototypes:
 
@@ -217,9 +252,19 @@ void			Cross(float[3], float[3], float[3]);
 float			Dot(float [3], float [3]);
 float			Unit(float [3], float [3]);
 
+// Rotating a point an angle about the x axis around a center
+void
+RotateX(Point*, float, float, float, float);
+// Rotating a point an angle about the y axis around a center
+void
+RotateY(Point*, float, float, float, float);
+// Rotating a point an angle about the z axis around a center
+void
+RotateZ(Point*, float, float, float, float);
+void
+DrawBezierCurve(GLfloat, Curve);
 
 // main program:
-
 int
 main( int argc, char *argv[ ] )
 {
@@ -271,10 +316,9 @@ Animate( )
 	// put animation stuff in here -- change some global variables
 	// for Display( ) to find:
 
-	const int MS_IN_THE_ANIMATION_CYCLE = 10000;	// milliseconds in the animation loop
 	int ms = glutGet(GLUT_ELAPSED_TIME);			// milliseconds since the program started
-	ms %= MS_IN_THE_ANIMATION_CYCLE;				// milliseconds in the range 0 to MS_IN_THE_ANIMATION_CYCLE-1
-	Time = (float)ms / (float)MS_IN_THE_ANIMATION_CYCLE;        // [ 0., 1. )
+	ms %= MS_PER_CYCLE;				// milliseconds in the range 0 to MS_IN_THE_ANIMATION_CYCLE-1
+	Time = (float)ms / (float)MS_PER_CYCLE;        // [ 0., 1. )
 
 	// force a call to Display( ) next time it is convenient:
 
@@ -303,6 +347,7 @@ Display( )
 	glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
 
 	glEnable( GL_DEPTH_TEST );
+
 #ifdef DEMO_DEPTH_BUFFER
 	if( DepthBufferOn == 0 )
 		glDisable( GL_DEPTH_TEST );
@@ -395,31 +440,15 @@ Display( )
 		glPopMatrix( );
 	}
 #endif
-
-	// draw some gratuitous text that just rotates on top of the scene:
-
-	glDisable( GL_DEPTH_TEST );
-	glColor3f( 0., 1., 1. );
-	DoRasterString( 0., 1., 0., (char *)"Text That Moves" );
-
-	// draw some gratuitous text that is fixed on the screen:
-	//
-	// the projection matrix is reset to define a scene whose
-	// world coordinate system goes from 0-100 in each axis
-	//
-	// this is called "percent units", and is just a convenience
-	//
-	// the modelview matrix is reset to identity as we don't
-	// want to transform these coordinates
-
-	glDisable( GL_DEPTH_TEST );
-	glMatrixMode( GL_PROJECTION );
-	glLoadIdentity( );
-	gluOrtho2D( 0., 100.,     0., 100. );
-	glMatrixMode( GL_MODELVIEW );
-	glLoadIdentity( );
-	glColor3f( 1., 1., 1. );
-	DoRasterString( 5., 5., 0., (char *)"Text That Doesn't" );
+	//RotateZ(Point* p, float deg, float xc, float yc, float zc)
+	RotateY(&Stem.p0, 90 * sinf(Time), 0,0,0);
+	RotateY(&Stem.p1, 60 * sinf(Time), 0,0,0);
+	RotateY(&Stem.p2, -30 * sinf(Time), 0,0,0);
+	RotateY(&Stem.p3, 180 * sinf(Time), 0,0,0);
+	Stem.p1.x = Stem.p1.x0 - 0.45*(Stem.p0.x - Stem.p1.x0);
+	Stem.p2.x = Stem.p2.x0 - 0.45*(Stem.p3.x - Stem.p2.x0);
+	RotateY(&Stem.p3, 100 * sinf(Time), 0, 0, 0);
+	DrawBezierCurve(10, Stem);
 
 	// swap the double-buffered framebuffers:
 
@@ -686,7 +715,7 @@ InitGraphics( )
 	glutMouseFunc( MouseButton );
 	glutMotionFunc( MouseMotion );
 	glutPassiveMotionFunc(MouseMotion);
-	//glutPassiveMotionFunc( NULL );
+	glutPassiveMotionFunc( NULL );
 	glutVisibilityFunc( Visibility );
 	glutEntryFunc( NULL );
 	glutSpecialFunc( NULL );
@@ -699,7 +728,7 @@ InitGraphics( )
 	glutTabletButtonFunc( NULL );
 	glutMenuStateFunc( NULL );
 	glutTimerFunc( -1, NULL, 0 );
-	glutIdleFunc( NULL );
+	glutIdleFunc( Animate );
 
 	// init glew (a window must be open to do this):
 
@@ -713,8 +742,24 @@ InitGraphics( )
 		fprintf( stderr, "GLEW initialized OK\n" );
 	fprintf( stderr, "Status: Using GLEW %s\n", glewGetString(GLEW_VERSION));
 #endif
-}
 
+	Stem.p0.x0 = 1;
+	Stem.p0.y0 = 3;
+	Stem.p0.z0 = 3;
+	
+	Stem.p1.x0 = -1;
+	Stem.p1.y0 = 3;
+	Stem.p1.z0 = 3;
+	
+	Stem.p2.x0 = 1;
+	Stem.p2.y0 = 3;
+	Stem.p2.z0 = -3;
+
+	Stem.p3.x0 = 1;
+	Stem.p3.y0 = -3;
+	Stem.p3.z0 = 3;
+	
+}
 
 // initialize the display lists that will not change:
 // (a display list is a way to store opengl commands in
@@ -724,57 +769,6 @@ InitGraphics( )
 void
 InitLists( )
 {
-	float dx = BOXSIZE / 2.f;
-	float dy = BOXSIZE / 2.f;
-	float dz = BOXSIZE / 2.f;
-	glutSetWindow( MainWindow );
-
-	// create the object:
-
-	BoxList = glGenLists( 1 );
-	glNewList( BoxList, GL_COMPILE );
-
-		glBegin( GL_QUADS );
-
-			glColor3f( 0., 0., 1. );
-				glVertex3f( -dx, -dy,  dz );
-				glVertex3f(  dx, -dy,  dz );
-				glVertex3f(  dx,  dy,  dz );
-				glVertex3f( -dx,  dy,  dz );
-
-				glVertex3f( -dx, -dy, -dz );
-				glVertex3f( -dx,  dy, -dz );
-				glVertex3f(  dx,  dy, -dz );
-				glVertex3f(  dx, -dy, -dz );
-
-			glColor3f( 1., 0., 0. );
-				glVertex3f(  dx, -dy,  dz );
-				glVertex3f(  dx, -dy, -dz );
-				glVertex3f(  dx,  dy, -dz );
-				glVertex3f(  dx,  dy,  dz );
-
-				glVertex3f( -dx, -dy,  dz );
-				glVertex3f( -dx,  dy,  dz );
-				glVertex3f( -dx,  dy, -dz );
-				glVertex3f( -dx, -dy, -dz );
-
-			glColor3f( 0., 1., 0. );
-				glVertex3f( -dx,  dy,  dz );
-				glVertex3f(  dx,  dy,  dz );
-				glVertex3f(  dx,  dy, -dz );
-				glVertex3f( -dx,  dy, -dz );
-
-				glVertex3f( -dx, -dy,  dz );
-				glVertex3f( -dx, -dy, -dz );
-				glVertex3f(  dx, -dy, -dz );
-				glVertex3f(  dx, -dy,  dz );
-
-		glEnd( );
-
-	glEndList( );
-
-	// create the axes:
-
 	AxesList = glGenLists( 1 );
 	glNewList( AxesList, GL_COMPILE );
 		glLineWidth( AXES_WIDTH );
@@ -1441,4 +1435,114 @@ Unit(float vin[3], float vout[3])
 		vout[2] = vin[2];
 	}
 	return dist;
+}
+
+// Rotating a point an angle about the x axis around a center
+void
+RotateX(Point* p, float deg, float xc, float yc, float zc)
+{
+	float rad = deg * (M_PI / 180.f);         // radians
+	float x = p->x0 - xc;
+	float y = p->y0 - yc;
+	float z = p->z0 - zc;
+
+	float xp = x;
+	float yp = y * cos(rad) - z * sin(rad);
+	float zp = y * sin(rad) + z * cos(rad);
+
+	p->x = xp + xc;
+	p->y = yp + yc;
+	p->z = zp + zc;
+}
+
+// Rotating a point an angle about the y axis around a center
+void
+RotateY(Point* p, float deg, float xc, float yc, float zc)
+{
+	float rad = deg * (M_PI / 180.f);         // radians
+	float x = p->x0 - xc;
+	float y = p->y0 - yc;
+	float z = p->z0 - zc;
+
+	float xp = x * cos(rad) + z * sin(rad);
+	float yp = y;
+	float zp = -x * sin(rad) + z * cos(rad);
+
+	p->x = xp + xc;
+	p->y = yp + yc;
+	p->z = zp + zc;
+}
+
+// Rotating a point an angle about the z axis around a center
+void
+RotateZ(Point* p, float deg, float xc, float yc, float zc)
+{
+	float rad = deg * (M_PI / 180.f);         // radians
+	float x = p->x0 - xc;
+	float y = p->y0 - yc;
+	float z = p->z0 - zc;
+
+	float xp = x * cos(rad) - y * sin(rad);
+	float yp = x * sin(rad) + y * cos(rad);
+	float zp = z;
+
+	p->x = xp + xc;
+	p->y = yp + yc;
+	p->z = zp + zc;
+}
+
+void
+DrawBezierCurve(GLfloat width, Curve curve)
+{
+
+	//
+	glBegin(GL_LINE_STRIP);
+	glColor3f(0.3,0.4,0.5);
+	glVertex3f(curve.p0.x, curve.p0.y, curve.p0.z);
+	glVertex3f(curve.p1.x, curve.p1.y, curve.p1.z);
+	glVertex3f(curve.p2.x, curve.p2.y, curve.p2.z);
+	glVertex3f(curve.p3.x, curve.p3.y, curve.p3.z);
+	glEnd();
+	//
+
+	//
+	glPushMatrix();
+	glTranslatef(curve.p0.x, curve.p0.y, curve.p0.z);
+	glColor3f(1, 1, 1);
+	glutSolidSphere(0.04, 50, 50);
+	glPopMatrix();
+
+	glPushMatrix();
+	glTranslatef(curve.p1.x, curve.p1.y, curve.p1.z);
+	glColor3f(0.8, 0.8, 0.8);
+	glutSolidSphere(0.03, 50, 50);
+	glPopMatrix();
+
+	glPushMatrix();
+	glTranslatef(curve.p2.x, curve.p2.y, curve.p2.z);
+	glColor3f(0.8, 0.8, 0.8);
+	glutSolidSphere(0.03, 50, 50);
+	glPopMatrix();
+
+	glPushMatrix();
+	glTranslatef(curve.p3.x, curve.p3.y, curve.p3.z);
+	glColor3f(1, 1, 1);
+	glutSolidSphere(0.04, 50, 50);
+	glPopMatrix();
+	//
+
+	glLineWidth(width);
+	glColor3f(1.,0.,0.);
+	glBegin(GL_LINE_STRIP);
+	for (int it = 0; it <= NUMPOINTS; it++)
+	{
+		float t = (float)it / (float)NUMPOINTS;
+		float omt = 1.f - t;
+		float x = omt * omt * omt * curve.p0.x + 3.f * t * omt * omt * curve.p1.x + 3.f * t * t * omt * curve.p2.x + t * t * t * curve.p3.x;
+		float y = omt * omt * omt * curve.p0.y + 3.f * t * omt * omt * curve.p1.y + 3.f * t * t * omt * curve.p2.y + t * t * t * curve.p3.y;
+		float z = omt * omt * omt * curve.p0.z + 3.f * t * omt * omt * curve.p1.z + 3.f * t * t * omt * curve.p2.z + t * t * t * curve.p3.z;
+		glVertex3f(x, y, z);
+	}
+	glEnd();
+	glLineWidth(1.);
 }
