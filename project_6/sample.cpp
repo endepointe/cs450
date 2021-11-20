@@ -205,6 +205,8 @@ int		DebugOn;				// != 0 means to print debugging info
 int		DepthCueOn;				// != 0 means to use intensity depth cueing
 int		DepthBufferOn;			// != 0 means to use the z-buffer
 int		DepthFightingOn;		// != 0 means to force the creation of z-fighting
+int		ControlLinesOn;
+int		ControlPointsOn;
 int		MainWindow;				// window id for main graphics window
 float	Scale;					// scaling factor
 float	Time = 0.;					// timer in the range [0.,1.)
@@ -213,6 +215,8 @@ int		WhichProjection;		// ORTHO or PERSP
 int		Xmouse, Ymouse;			// mouse values
 float	Xrot, Yrot;				// rotation angles in degrees
 bool Freeze = TRUE;
+bool TurnControlLinesOn = TRUE;
+bool TurnControlPointsOn = TRUE;
 Curve Curves[NUMCURVES];
 Curve Stem; 
 
@@ -442,12 +446,12 @@ Display( )
 #endif
 	//RotateZ(Point* p, float deg, float xc, float yc, float zc)
 	RotateY(&Stem.p0, 90 * sinf(Time), 0,0,0);
-	RotateY(&Stem.p1, 60 * sinf(Time), 0,0,0);
-	RotateY(&Stem.p2, -30 * sinf(Time), 0,0,0);
-	RotateY(&Stem.p3, 180 * sinf(Time), 0,0,0);
+	RotateY(&Stem.p1, 90 * sinf(Time), 0,0,0);
+	RotateY(&Stem.p2, 90 * sinf(Time), 0,0,0);
+	RotateY(&Stem.p3, 90 * sinf(Time), 0,0,0);
 	Stem.p1.x = Stem.p1.x0 - 0.45*(Stem.p0.x - Stem.p1.x0);
 	Stem.p2.x = Stem.p2.x0 - 0.45*(Stem.p3.x - Stem.p2.x0);
-	RotateY(&Stem.p3, 100 * sinf(Time), 0, 0, 0);
+	RotateY(&Stem.p3, 0 * sinf(Time), 0, 0, 0);
 	DrawBezierCurve(10, Stem);
 
 	// swap the double-buffered framebuffers:
@@ -553,6 +557,39 @@ DoProjectMenu( int id )
 	glutPostRedisplay( );
 }
 
+void
+DoControlLineMenu( int id )
+{
+	//ControlLinesOn = id;
+	if (id == 1)
+	{
+		TurnControlLinesOn = TRUE;
+	}
+	if (id == 0)
+	{
+		TurnControlLinesOn = FALSE;
+	}
+	glutSetWindow( MainWindow );
+	glutPostRedisplay();
+}
+
+void
+DoControlPointMenu( int id )
+{
+	//ControlLinesOn = id;
+	if (id == 1)
+	{
+		TurnControlPointsOn = TRUE;
+	}
+	if (id == 0)
+	{
+		TurnControlPointsOn = FALSE;
+	}
+	glutSetWindow( MainWindow );
+	glutPostRedisplay();
+}
+
+
 
 // use glut to display a string of characters using a raster font:
 
@@ -637,6 +674,14 @@ InitMenus( )
 	glutAddMenuEntry( "Orthographic",  ORTHO );
 	glutAddMenuEntry( "Perspective",   PERSP );
 
+	int controllinemenu = glutCreateMenu( DoControlLineMenu );
+	glutAddMenuEntry( "Off", 0);
+	glutAddMenuEntry( "On", 1);
+
+	int controlpointmenu = glutCreateMenu( DoControlPointMenu );
+	glutAddMenuEntry( "Off", 0);
+	glutAddMenuEntry( "On", 1);
+
 	int mainmenu = glutCreateMenu( DoMainMenu );
 	glutAddSubMenu(   "Axes",          axesmenu);
 	glutAddSubMenu(   "Colors",        colormenu);
@@ -652,8 +697,11 @@ InitMenus( )
 	glutAddSubMenu(   "Depth Cue",     depthcuemenu);
 	glutAddSubMenu(   "Projection",    projmenu );
 	glutAddMenuEntry( "Reset",         RESET );
+	glutAddSubMenu( "Control Lines", controllinemenu);
+	glutAddSubMenu( "Control Points", controlpointmenu);
 	glutAddSubMenu(   "Debug",         debugmenu);
 	glutAddMenuEntry( "Quit",          QUIT );
+
 
 // attach the pop-up menu to the right mouse button:
 
@@ -743,20 +791,20 @@ InitGraphics( )
 	fprintf( stderr, "Status: Using GLEW %s\n", glewGetString(GLEW_VERSION));
 #endif
 
-	Stem.p0.x0 = 1;
-	Stem.p0.y0 = 3;
-	Stem.p0.z0 = 3;
+	Stem.p0.x0 = 0;
+	Stem.p0.y0 = 0;
+	Stem.p0.z0 = 0;
 	
-	Stem.p1.x0 = -1;
-	Stem.p1.y0 = 3;
-	Stem.p1.z0 = 3;
+	Stem.p1.x0 = 1;
+	Stem.p1.y0 = 1;
+	Stem.p1.z0 = 1;
 	
-	Stem.p2.x0 = 1;
-	Stem.p2.y0 = 3;
-	Stem.p2.z0 = -3;
+	Stem.p2.x0 = 2;
+	Stem.p2.y0 = 2;
+	Stem.p2.z0 = 2;
 
-	Stem.p3.x0 = 1;
-	Stem.p3.y0 = -3;
+	Stem.p3.x0 = 3;
+	Stem.p3.y0 = 3;
 	Stem.p3.z0 = 3;
 	
 }
@@ -803,7 +851,23 @@ Keyboard( unsigned char c, int x, int y )
 		case ESCAPE:
 			DoMainMenu( QUIT );	// will not return here
 			break;				// happy compiler
-
+		case 'f':
+		case 'F':
+			Freeze = !Freeze;
+			if (Freeze) 
+			{
+				glutIdleFunc(NULL);
+			}
+			glutIdleFunc(Animate);
+			break;
+		case 'l':
+		case 'L':
+			TurnControlLinesOn = !TurnControlLinesOn;
+			break;
+		case 'k':
+		case 'K':
+			TurnControlPointsOn = !TurnControlPointsOn;
+			break;
 		default:
 			fprintf( stderr, "Don't know what to do with keyboard hit: '%c' (0x%0x)\n", c, c );
 	}
@@ -1495,41 +1559,49 @@ void
 DrawBezierCurve(GLfloat width, Curve curve)
 {
 
-	//
-	glBegin(GL_LINE_STRIP);
-	glColor3f(0.3,0.4,0.5);
-	glVertex3f(curve.p0.x, curve.p0.y, curve.p0.z);
-	glVertex3f(curve.p1.x, curve.p1.y, curve.p1.z);
-	glVertex3f(curve.p2.x, curve.p2.y, curve.p2.z);
-	glVertex3f(curve.p3.x, curve.p3.y, curve.p3.z);
-	glEnd();
-	//
+	// Turn control lines on
+	///*
+	if (TurnControlLinesOn)
+	{
+    glBegin(GL_LINE_STRIP);
+    glColor3f(0.3,0.4,0.5);
+    glVertex3f(curve.p0.x, curve.p0.y, curve.p0.z);
+    glVertex3f(curve.p1.x, curve.p1.y, curve.p1.z);
+    glVertex3f(curve.p2.x, curve.p2.y, curve.p2.z);
+    glVertex3f(curve.p3.x, curve.p3.y, curve.p3.z);
+    glEnd();
+	}
+	//*/
 
-	//
-	glPushMatrix();
-	glTranslatef(curve.p0.x, curve.p0.y, curve.p0.z);
-	glColor3f(1, 1, 1);
-	glutSolidSphere(0.04, 50, 50);
-	glPopMatrix();
+	// Turn control points on
+	///*
+	if (TurnControlPointsOn)
+	{ 
+    glPushMatrix();
+    glTranslatef(curve.p0.x, curve.p0.y, curve.p0.z);
+    glColor3f(1, 1, 1);
+    glutSolidSphere(0.04, 50, 50);
+    glPopMatrix();
 
-	glPushMatrix();
-	glTranslatef(curve.p1.x, curve.p1.y, curve.p1.z);
-	glColor3f(0.8, 0.8, 0.8);
-	glutSolidSphere(0.03, 50, 50);
-	glPopMatrix();
+    glPushMatrix();
+    glTranslatef(curve.p1.x, curve.p1.y, curve.p1.z);
+    glColor3f(0.8, 0.8, 0.8);
+    glutSolidSphere(0.03, 50, 50);
+    glPopMatrix();
 
-	glPushMatrix();
-	glTranslatef(curve.p2.x, curve.p2.y, curve.p2.z);
-	glColor3f(0.8, 0.8, 0.8);
-	glutSolidSphere(0.03, 50, 50);
-	glPopMatrix();
+    glPushMatrix();
+    glTranslatef(curve.p2.x, curve.p2.y, curve.p2.z);
+    glColor3f(0.8, 0.8, 0.8);
+    glutSolidSphere(0.03, 50, 50);
+    glPopMatrix();
 
-	glPushMatrix();
-	glTranslatef(curve.p3.x, curve.p3.y, curve.p3.z);
-	glColor3f(1, 1, 1);
-	glutSolidSphere(0.04, 50, 50);
-	glPopMatrix();
-	//
+    glPushMatrix();
+    glTranslatef(curve.p3.x, curve.p3.y, curve.p3.z);
+    glColor3f(1, 1, 1);
+    glutSolidSphere(0.04, 50, 50);
+    glPopMatrix();
+	}
+	//*/
 
 	glLineWidth(width);
 	glColor3f(1.,0.,0.);
