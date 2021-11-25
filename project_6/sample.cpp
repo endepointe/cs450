@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include <time.h>
 
 #define _USE_MATH_DEFINES
 #include <math.h>
@@ -67,7 +68,8 @@ const int ESCAPE = { 0x1b };
 
 // initial window size:
 
-const int INIT_WINDOW_SIZE = { 800 };
+const int INIT_WINDOW_WIDTH = { 800 };
+const int INIT_WINDOW_HEIGHT = { 600 };
 
 // size of the 3d box:
 const float BOXSIZE = { 2.f };
@@ -190,9 +192,14 @@ struct Curve
 	Point p0, p1, p2, p3;
 };
 
+struct RGB
+{
+	float r, g, b;
+};
+
 const int MS_PER_CYCLE = {4000};
-const int NUMCURVES = 5;
-const int NUMPOINTS = 30;
+const int NUMCURVES = 200;
+const int NUMPOINTS = 10;
 
 // non-constant global variables:
 
@@ -214,8 +221,8 @@ int		WhichProjection;		// ORTHO or PERSP
 int		Xmouse, Ymouse;			// mouse values
 float	Xrot, Yrot;				// rotation angles in degrees
 bool Freeze = TRUE;
-bool TurnControlLinesOn = TRUE;
-bool TurnControlPointsOn = TRUE;
+bool TurnControlLinesOn = FALSE;
+bool TurnControlPointsOn = FALSE;
 Curve Curves[NUMCURVES];
 Curve Stem; 
 Curve Stem1;
@@ -266,7 +273,9 @@ RotateY(Point*, float, float, float, float);
 void
 RotateZ(Point*, float, float, float, float);
 void
-DrawBezierCurve(GLfloat, Curve);
+DrawBezierCurve(GLfloat, Curve, RGB);
+void 
+DrawCircle(GLfloat, GLfloat, GLfloat, RGB);
 
 // main program:
 int
@@ -460,125 +469,120 @@ Display( )
   //	Point p0, p1, p2, p3;
   //};
 
-	int curve_count = 0;
+	srand((unsigned)time(NULL));
+	/*
+	RGB rgb;
+	rgb.r = 0.5;
+	rgb.g = 0.2;
+	rgb.b = 0.8;
+	glPushMatrix();
+		DrawCircle(1., 0., 1., rgb);
+		DrawCircle(0., 1., 1., rgb);
+	glPopMatrix();
+	*/
+	/*
+	glPushMatrix();
+    for (int c = 0; c < NUMCURVES; c++) {
+      float angle = 360. * c / NUMCURVES;
+			RGB rgb;
+			rgb.r = ((float)rand() / (RAND_MAX));
+			rgb.b = ((float)rand() / (RAND_MAX)); 
+			rgb.g = ((float)rand() / (RAND_MAX));
+      Curve curve;
+      curve.p0.x0 = 0.;
+      curve.p0.y0 = 0.;
+      curve.p0.z0 = 0.;
+
+      curve.p1.x0 = 0.;
+      curve.p1.y0 = 0.;
+      curve.p1.z0 = 0.; 
+
+      curve.p2.x0 = 0.;
+      curve.p2.y0 = 0.; 
+      curve.p2.z0 = 0.;
+
+      curve.p3.x0 = 1.;
+      curve.p3.y0 = 1.;
+      curve.p3.z0 = 1.;
+
+      RotateX(&curve.p0, 400. * sinf(Time), 0., 0., 0.);
+      RotateY(&curve.p1, 400. * sinf(Time), 0., 0., 0.);
+      RotateZ(&curve.p2, 400. * sinf(Time), 0., 0., 0.);
+      RotateX(&curve.p3, 400. * sinf(Time), 0., 0., 0.);
+
+      DrawBezierCurve(5, curve, rgb);
+    }
+	glPopMatrix();
+	*/
 
 	glPushMatrix();
-    curve_count = 50;
-    //glTranslatef(.6, 1.15 * ((sin(2 * M_PI * Time) / 6) + 1.25), .4);
-    //glScalef(.6, .6, .6);
-    for (int c = 0; c < curve_count; c++) {
-      float angle = 360. * c / curve_count;
+		//glTranslatef(0.)
+    for (int c = 0; c < NUMCURVES; c++) {
+      float angle = 360. * c / NUMCURVES;
+			float move = (sin(Time*2*M_PI) + 1)/2.5;
+			RGB rgb;
+			rgb.r = ((float)rand() / (RAND_MAX));
+			rgb.b = ((float)rand() / (RAND_MAX)); 
+			rgb.g = ((float)rand() / (RAND_MAX));
+      Curve curve;
+      curve.p0.x0 = 0.;
+      curve.p0.y0 = 0.;
+      curve.p0.z0 = 0.;
+
+      curve.p1.x0 = cos(angle) * 2;
+      curve.p1.y0 = 1.;
+      curve.p1.z0 = sin(angle)*2; 
+
+      curve.p2.x0 = cos(angle/3) * move * 2;
+      curve.p2.y0 = 2.-move*2; 
+      curve.p2.z0 = sin(angle*3)*move*2;
+
+      curve.p3.x0 = cos(angle/2)*move*3;
+      curve.p3.y0 = 3.-move*3;
+      curve.p3.z0 = sin(angle/2)*move*3;
+
+      RotateY(&curve.p0, 1800., 1., 1., 0.);
+      RotateY(&curve.p1, 1800., 0.8, 0.8, 0.6);
+      RotateY(&curve.p2, 1800., 0.6, 0.6, 0.8);
+      RotateY(&curve.p3, 1800., 0.4, 0.4, 1.);
+
+      DrawBezierCurve(5, curve, rgb);
+    }
+	glPopMatrix();
+
+	/*
+	glPushMatrix();
+    for (int c = 0; c < NUMCURVES; c++) {
+      float angle = 360. * c / NUMCURVES;
+			RGB rgb;
+			rgb.r = ((float)rand() / (RAND_MAX));
+			rgb.b = ((float)rand() / (RAND_MAX)); 
+			rgb.g = ((float)rand() / (RAND_MAX));
       Curve curve;
       curve.p0.x0 = 0.;
       curve.p0.y0 = 0.;
       curve.p0.z0 = 0.;
 
       curve.p1.x0 = cos(angle) / 1.5;
-      curve.p1.y0 = .99;
+      curve.p1.y0 = .33;
       curve.p1.z0 = (((cos(angle * 2)) / 2) - .5) * .8;
 
       curve.p2.x0 = cos(angle) / 1.5;
-      curve.p2.y0 = .99; 
+      curve.p2.y0 = .66; 
       curve.p2.z0 = (((cos(angle * 2)) / 2) - .5) * .8;
 
       curve.p3.x0 = 0.;
       curve.p3.y0 = 1.;
       curve.p3.z0 = 0.;
 
-      RotateX(&curve.p0, 180. * sinf(Time), 0., 0., 0.);
-      RotateY(&curve.p1, 180. * sinf(Time), 0., 0., 0.);
-      RotateZ(&curve.p2, 180. * sinf(Time), 0., 0., 0.);
-      RotateY(&curve.p3, 180. * sinf(Time), 0., 0., 0.);
+      RotateX(&curve.p0, 390. * sinf(Time), 0., 0., 0.);
+      RotateY(&curve.p1, 390. * sinf(Time), 0., 0., 0.);
+      RotateZ(&curve.p2, 390. * sinf(Time), 0., 0., 0.);
+      RotateX(&curve.p3, 390. * sinf(Time), 0., 0., 0.);
 
-      DrawBezierCurve(5, curve);
+      DrawBezierCurve(5, curve, rgb);
     }
 	glPopMatrix();
-
-
-	glPushMatrix();
-    curve_count = 50;
-    //glTranslatef(.6, 1.15 * ((sin(2 * M_PI * Time) / 6) + 1.25), .4);
-    //glScalef(.6, .6, .6);
-    for (int c = 0; c < curve_count; c++) {
-      float angle = 360. * c / curve_count;
-      Curve curve;
-      curve.p0.x0 = 0.;
-      curve.p0.y0 = 0.;
-      curve.p0.z0 = 0.;
-
-      curve.p1.x0 = cos(angle) / 1.5;
-      curve.p1.y0 = .99;
-      curve.p1.z0 = (((cos(angle * 2)) / 2) - .5) * .8;
-
-      curve.p2.x0 = cos(angle) / 1.5;
-      curve.p2.y0 = .99; 
-      curve.p2.z0 = (((cos(angle * 2)) / 2) - .5) * .8;
-
-      curve.p3.x0 = 0.;
-      curve.p3.y0 = 1.;
-      curve.p3.z0 = 0.;
-
-      RotateX(&curve.p0, -180. * sinf(Time), 0., 0., 0.);
-      RotateY(&curve.p1, -180. * sinf(Time), 0., 0., 0.);
-      RotateZ(&curve.p2, -180. * sinf(Time), 0., 0., 0.);
-      RotateY(&curve.p3, -180. * sinf(Time), 0., 0., 0.);
-
-      DrawBezierCurve(5, curve);
-    }
-	glPopMatrix();
-
-	/*
-	glPushMatrix();
-		int curve_count = 25;
-		for (int c = 0; c < curve_count; c++)
-		{
-			float angle = 360. * c / curve_count;
-			float move = (sin(Time*2.*M_PI) + 1) / 2.5;
-			Curve crv;
-			crv.p0.x = 0.;
-			crv.p0.y = 0.;
-			crv.p0.z = 0.;
-
-			crv.p1.x = cosf(angle)*2.;
-			crv.p1.y =  1.;
-			crv.p1.z = sinf(angle)*2.;
-
-			crv.p2.x = cosf(angle/3.)*move*2.;
-			crv.p2.y = 2.-move*2.;
-			crv.p2.z = sinf(angle*3.)*move*2.;
-
-			crv.p3.x = cosf(angle/2.)*move*3.;
-			crv.p3.y = 3.-move*3.;
-			crv.p3.z = sinf(angle/2.)*move*3.;
-			DrawBezierCurve(5, crv);
-		}
-	glPopMatrix();
-	*/
-
-	/*
-	RotateX(&Stem.p0, 90 * sinf(Time), 0, 1, 1);
-	RotateY(&Stem.p1, 90 * sinf(Time), 1, 1, 1);
-	RotateZ(&Stem.p2, 90 * sinf(Time), 0, 1, 0);
-	DrawBezierCurve(4, Stem);
-	*/
-	/*
-	RotateX(&Stem.p0, 90 * sinf(Time), 0,0,0);
-	RotateY(&Stem.p1, -90 * sinf(Time), 0,0,0);
-	RotateZ(&Stem.p2, 90 * sinf(Time), 0,0,0);
-	RotateZ(&Stem.p3, -90 * sinf(Time), 0,0,0);
-	Stem.p1.x = Stem.p1.x0 - 0.45*(Stem.p0.x - Stem.p1.x0);
-	Stem.p2.x = Stem.p2.x0 - 0.45*(Stem.p3.x - Stem.p2.x0);
-	RotateZ(&Stem.p3, -90 * sinf(Time), 0, 0, 0);
-	DrawBezierCurve(5, Stem);
-
-	RotateX(&Stem1.p0, -90 * sinf(Time), 0,0,0);
-	RotateY(&Stem1.p1, 90 * sinf(Time), 0,0,0);
-	RotateZ(&Stem1.p2, -90 * sinf(Time), 0,0,0);
-	RotateZ(&Stem1.p3, 90 * sinf(Time), 0,0,0);
-	Stem1.p1.x = Stem1.p1.x0 + 0.45*(Stem1.p0.x - Stem1.p1.x0);
-	Stem1.p2.x = Stem1.p2.x0 + 0.45*(Stem1.p3.x - Stem1.p2.x0);
-	RotateZ(&Stem1.p3, 90 * sinf(Time), 0, 0, 0);
-	DrawBezierCurve(5, Stem1);
 	*/
 
 	// swap the double-buffered framebuffers:
@@ -850,7 +854,7 @@ InitGraphics( )
 	// set the initial window configuration:
 
 	glutInitWindowPosition( 0, 0 );
-	glutInitWindowSize( INIT_WINDOW_SIZE, INIT_WINDOW_SIZE );
+	glutInitWindowSize( INIT_WINDOW_WIDTH, INIT_WINDOW_HEIGHT );
 
 	// open the window and set its title:
 
@@ -917,39 +921,6 @@ InitGraphics( )
 	fprintf( stderr, "Status: Using GLEW %s\n", glewGetString(GLEW_VERSION));
 #endif
 
-	/*
-	Stem.p0.x0 = 0;
-	Stem.p0.y0 = 0;
-	Stem.p0.z0 = 0;
-	
-	Stem.p1.x0 = 0;
-	Stem.p1.y0 = 0;
-	Stem.p1.z0 = 0;
-	
-	Stem.p2.x0 = 1;
-	Stem.p2.y0 = 1;
-	Stem.p2.z0 = 1;
-
-	Stem.p3.x0 = 1;
-	Stem.p3.y0 = 1;
-	Stem.p3.z0 = 1;
-
-	Stem1.p0.x0 = 0;
-	Stem1.p0.y0 = 0;
-	Stem1.p0.z0 = 0;
-	
-	Stem1.p1.x0 = 0;
-	Stem1.p1.y0 = 0;
-	Stem1.p1.z0 = 0;
-	
-	Stem1.p2.x0 = -1;
-	Stem1.p2.y0 = -1;
-	Stem1.p2.z0 = -1;
-
-	Stem1.p3.x0 = -1;
-	Stem1.p3.y0 = -1;
-	Stem1.p3.z0 = -1;
-	*/
 }
 
 // initialize the display lists that will not change:
@@ -1701,7 +1672,7 @@ RotateZ(Point* p, float deg, float xc, float yc, float zc)
 }
 
 void
-DrawBezierCurve(GLfloat width, Curve curve)
+DrawBezierCurve(GLfloat width, Curve curve, RGB color)
 {
 
 	// Turn control lines on
@@ -1709,7 +1680,7 @@ DrawBezierCurve(GLfloat width, Curve curve)
 	if (TurnControlLinesOn)
 	{
     glBegin(GL_LINE_STRIP);
-    glColor3f(0.3,0.4,0.5);
+    glColor3f(1.,1.,1.);
     glVertex3f(curve.p0.x, curve.p0.y, curve.p0.z);
     glVertex3f(curve.p1.x, curve.p1.y, curve.p1.z);
     glVertex3f(curve.p2.x, curve.p2.y, curve.p2.z);
@@ -1752,7 +1723,7 @@ DrawBezierCurve(GLfloat width, Curve curve)
 	P = ((1.-t)^3)(p0) + (3t(1.-t)^2)(p1) + (3t^2(1.-t)(p2) + (t^3)(p3)
 	*/
 	glLineWidth(width);
-	glColor3f(1.,0.6,0.3);
+	glColor3f(color.r, color.g, color.b);
 	glBegin(GL_LINE_STRIP);
 	for (int it = 0; it <= NUMPOINTS; it++)
 	{
@@ -1765,4 +1736,22 @@ DrawBezierCurve(GLfloat width, Curve curve)
 	}
 	glEnd();
 	glLineWidth(1.);
+}
+void 
+DrawCircle(GLfloat x, GLfloat y, GLfloat radius, RGB color)
+{
+	int i;
+	int slices = 20;
+	GLfloat twicePi = 2.0f * M_PI;
+	glBegin(GL_TRIANGLE_FAN);
+		glColor3f(color.r, color.g, color.b);
+		glVertex2f(x, y);
+		for (i = 0; i <= slices; i++)
+		{
+			glVertex2f(
+				x + (radius * cos(i * twicePi / slices)),
+				y + (radius * sin(i * twicePi / slices))
+			);
+		}
+	glEnd();
 }
