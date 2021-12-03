@@ -18,9 +18,21 @@
     <ClCompile Include="sample.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="glslprogram.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <Image Include="skull.jpg">
+      <Filter>Source Files</Filter>
+    </Image>
+    <Image Include="worldtex.bmp">
+      <Filter>Source Files</Filter>
+    </Image>
+    <Image Include="eye_red.bmp">
+      <Filter>Source Files</Filter>
+    </Image>
+    <Image Include="eye_star.bmp">
       <Filter>Source Files</Filter>
     </Image>
   </ItemGroup>
@@ -28,10 +40,21 @@
     <None Include="skull.mtl">
       <Filter>Source Files</Filter>
     </None>
+    <None Include="pattern.frag">
+      <Filter>Source Files</Filter>
+    </None>
+    <None Include="pattern.vert">
+      <Filter>Source Files</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <Object Include="skull.obj">
       <Filter>Source Files</Filter>
     </Object>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="glslprogram.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

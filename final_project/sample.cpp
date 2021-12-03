@@ -4,6 +4,8 @@
 #include <time.h>
 #include <string.h>
 #include <vector>
+#include "glslprogram.h"
+//#include "glslprogram.cpp"
 
 #define _USE_MATH_DEFINES
 #include <math.h>
@@ -17,6 +19,33 @@
 #include <GL/gl.h>
 #include <GL/glu.h>
 #include "glut.h"
+
+// sphere
+
+int		NumLngs, NumLats;
+struct point* Pts;
+
+struct point
+{
+	float x, y, z;		// coordinates
+	float nx, ny, nz;	// surface normal
+	float s, t;		// texture coords
+};
+
+inline
+struct point*
+	PtsPointer(int lat, int lng)
+{
+	if (lat < 0)	lat += (NumLats - 1);
+	if (lng < 0)	lng += (NumLngs - 0);
+	if (lat > NumLats - 1)	lat -= (NumLats - 1);
+	if (lng > NumLngs - 1)	lng -= (NumLngs - 0);
+	return &Pts[NumLngs * lat + lng];
+}
+// Sphere params
+#define SPHERE_RADIUS	1
+#define SPHERE_SLICES 100
+#define	SPHERE_STACKS	100
 
 // delimiters for parsing the obj file:
 
@@ -51,7 +80,8 @@ float	Unit(float[3]);
 float	Unit(float[3], float[3]);
 int
 LoadObjFile(char*);
-
+unsigned char*
+BmpToTexture(char*, int*, int*);
 
 // Final Project - Alvin Johns
 //
@@ -227,7 +257,8 @@ int		ActiveButton;			// current button that is down
 GLuint	AxesList;				// list to hold the axes
 int		AxesOn;					// != 0 means to draw the axes
 GLuint	BoxList;				// object display list
-GLuint SkullList;
+GLuint SkullList, RightEyeList, LeftEyeList;
+GLuint skullTexType, eyeStarTexType, eyeRedTexType;
 int		DebugOn;				// != 0 means to print debugging info
 int		DepthCueOn;				// != 0 means to use intensity depth cueing
 int		DepthBufferOn;			// != 0 means to use the z-buffer
@@ -247,6 +278,7 @@ bool TurnControlPointsOn = FALSE;
 Curve Curves[NUMCURVES];
 Curve Stem; 
 Curve Stem1;
+GLSLProgram *Pattern;
 
 // function prototypes:
 
@@ -265,6 +297,7 @@ void	DoRasterString( float, float, float, char * );
 void	DoStrokeString( float, float, float, float, char * );
 float	ElapsedSeconds( );
 void	InitGraphics( );
+void	InitTextures();
 void	InitLists( );
 void	InitMenus( );
 void	Keyboard( unsigned char, int, int );
@@ -297,6 +330,7 @@ void
 DrawBezierCurve(GLfloat, Curve, RGB);
 void 
 DrawCircle(GLfloat, GLfloat, GLfloat, RGB);
+void Sphere(float, int, int, float, float, float);
 
 // main program:
 int
@@ -311,6 +345,8 @@ main( int argc, char *argv[ ] )
 	// setup all the graphics stuff:
 
 	InitGraphics( );
+
+	InitTextures();
 
 	// init all the global variables used by Display( ):
 
@@ -475,6 +511,7 @@ Display( )
 	}
 #endif
 
+	/*
 	srand((unsigned)time(NULL));
 
 	glPushMatrix();
@@ -510,11 +547,27 @@ Display( )
       DrawBezierCurve(5, curve, rgb);
     }
 	glPopMatrix();
+	*/
 
+	glEnable(GL_TEXTURE_2D);
+	glBindTexture(GL_TEXTURE_2D, skullTexType);
 	glCallList(SkullList);
 
-	// swap the double-buffered framebuffers:
+	glDisable(GL_TEXTURE_2D);
 
+	//glBindTexture(GL_TEXTURE_2D, eyeRedTexType);
+	//glRotatef(-90.,0,0,1);
+	glCallList(LeftEyeList);
+
+	//glBindTexture(GL_TEXTURE_2D, eyeStarTexType);
+	Pattern->Use();
+	Pattern->SetUniformVariable("fTime", Time);
+	Pattern->SetUniformVariable("vTime", Time);
+	glCallList(RightEyeList);
+
+	//glDisable(GL_TEXTURE_2D);
+
+	// swap the double-buffered framebuffers:
 	glutSwapBuffers( );
 
 	// be sure the graphics buffer has been sent:
@@ -849,6 +902,13 @@ InitGraphics( )
 	fprintf( stderr, "Status: Using GLEW %s\n", glewGetString(GLEW_VERSION));
 #endif
 
+	// Load our shaders
+	Pattern = new GLSLProgram();
+	bool valid = Pattern->Create("pattern.vert", "pattern.frag");
+	if (!valid) {
+		fprintf(stderr, "Failed to create shader pattern");
+	}
+
 }
 
 // initialize the display lists that will not change:
@@ -863,6 +923,20 @@ InitLists( )
 	glNewList(SkullList, GL_COMPILE);
 		LoadObjFile("skull.obj");
 	glEndList();
+
+	LeftEyeList = glGenLists(1);
+	glNewList(LeftEyeList, GL_COMPILE);
+		glColor3f(0.8,0.8,0.8);
+		Sphere(2., SPHERE_SLICES, SPHERE_STACKS, -2.2, -5.4, 7.2);
+	glEndList();
+
+	RightEyeList = glGenLists(1);
+	glNewList(RightEyeList, GL_COMPILE);
+		glColor3f(0.8,0.8,0.8);
+		Sphere(2., SPHERE_SLICES, SPHERE_STACKS, 2.2, -5.4, 7.2);
+	glEndList();
+
+
 
 	AxesList = glGenLists( 1 );
 	glNewList( AxesList, GL_COMPILE );
@@ -1236,187 +1310,6 @@ struct bmih
 	int biClrImportant;
 } InfoHeader;
 
-// read a BMP file into a Texture:
-
-unsigned char *
-BmpToTexture( char *filename, int *width, int *height )
-{
-	FILE *fp;
-#ifdef _WIN32
-        errno_t err = fopen_s( &fp, filename, "rb" );
-        if( err != 0 )
-        {
-		fprintf( stderr, "Cannot open Bmp file '%s'\n", filename );
-		return NULL;
-        }
-#else
-	FILE *fp = fopen( filename, "rb" );
-	if( fp == NULL )
-	{
-		fprintf( stderr, "Cannot open Bmp file '%s'\n", filename );
-		return NULL;
-	}
-#endif
-
-	FileHeader.bfType = ReadShort( fp );
-
-	// if bfType is not BMP_MAGIC_NUMBER, the file is not a bmp:
-
-	if( VERBOSE ) fprintf( stderr, "FileHeader.bfType = 0x%0x = \"%c%c\"\n",
-			FileHeader.bfType, FileHeader.bfType&0xff, (FileHeader.bfType>>8)&0xff );
-	if( FileHeader.bfType != BMP_MAGIC_NUMBER )
-	{
-		fprintf( stderr, "Wrong type of file: 0x%0x\n", FileHeader.bfType );
-		fclose( fp );
-		return NULL;
-	}
-
-	FileHeader.bfSize = ReadInt( fp );
-	if( VERBOSE )	fprintf( stderr, "FileHeader.bfSize = %d\n", FileHeader.bfSize );
-
-	FileHeader.bfReserved1 = ReadShort( fp );
-	FileHeader.bfReserved2 = ReadShort( fp );
-
-	FileHeader.bfOffBytes = ReadInt( fp );
-	if( VERBOSE )	fprintf( stderr, "FileHeader.bfOffBytes = %d\n", FileHeader.bfOffBytes );
-
-	InfoHeader.biSize = ReadInt( fp );
-	if( VERBOSE )	fprintf( stderr, "InfoHeader.biSize = %d\n", InfoHeader.biSize );
-	InfoHeader.biWidth = ReadInt( fp );
-	if( VERBOSE )	fprintf( stderr, "InfoHeader.biWidth = %d\n", InfoHeader.biWidth );
-	InfoHeader.biHeight = ReadInt( fp );
-	if( VERBOSE )	fprintf( stderr, "InfoHeader.biHeight = %d\n", InfoHeader.biHeight );
-
-	const int nums = InfoHeader.biWidth;
-	const int numt = InfoHeader.biHeight;
-
-	InfoHeader.biPlanes = ReadShort( fp );
-	if( VERBOSE )	fprintf( stderr, "InfoHeader.biPlanes = %d\n", InfoHeader.biPlanes );
-
-	InfoHeader.biBitCount = ReadShort( fp );
-	if( VERBOSE )	fprintf( stderr, "InfoHeader.biBitCount = %d\n", InfoHeader.biBitCount );
-
-	InfoHeader.biCompression = ReadInt( fp );
-	if( VERBOSE )	fprintf( stderr, "InfoHeader.biCompression = %d\n", InfoHeader.biCompression );
-
-	InfoHeader.biSizeImage = ReadInt( fp );
-	if( VERBOSE )	fprintf( stderr, "InfoHeader.biSizeImage = %d\n", InfoHeader.biSizeImage );
-
-	InfoHeader.biXPixelsPerMeter = ReadInt( fp );
-	InfoHeader.biYPixelsPerMeter = ReadInt( fp );
-
-	InfoHeader.biClrUsed = ReadInt( fp );
-	if( VERBOSE )	fprintf( stderr, "InfoHeader.biClrUsed = %d\n", InfoHeader.biClrUsed );
-
-	InfoHeader.biClrImportant = ReadInt( fp );
-
-	// fprintf( stderr, "Image size found: %d x %d\n", ImageWidth, ImageHeight );
-
-	// pixels will be stored bottom-to-top, left-to-right:
-	unsigned char *texture = new unsigned char[ 3 * nums * numt ];
-	if( texture == NULL )
-	{
-		fprintf( stderr, "Cannot allocate the texture array!\n" );
-		return NULL;
-	}
-
-	// extra padding bytes:
-
-	int requiredRowSizeInBytes = 4 * ( ( InfoHeader.biBitCount*InfoHeader.biWidth + 31 ) / 32 );
-	if( VERBOSE )	fprintf( stderr, "requiredRowSizeInBytes = %d\n", requiredRowSizeInBytes );
-
-	int myRowSizeInBytes = ( InfoHeader.biBitCount*InfoHeader.biWidth + 7 ) / 8;
-	if( VERBOSE )	fprintf( stderr, "myRowSizeInBytes = %d\n", myRowSizeInBytes );
-
-	int oldNumExtra =  4*(( (3*InfoHeader.biWidth)+3)/4) - 3*InfoHeader.biWidth;
-	if( VERBOSE )	fprintf( stderr, "Old NumExtra padding = %d\n", oldNumExtra );
-
-	int numExtra = requiredRowSizeInBytes - myRowSizeInBytes;
-	if( VERBOSE )	fprintf( stderr, "New NumExtra padding = %d\n", numExtra );
-
-	// this function does not support compression:
-
-	if( InfoHeader.biCompression != 0 )
-	{
-		fprintf( stderr, "Wrong type of image compression: %d\n", InfoHeader.biCompression );
-		fclose( fp );
-		return NULL;
-	}
-	
-	// we can handle 24 bits of direct color:
-	if( InfoHeader.biBitCount == 24 )
-	{
-		rewind( fp );
-		fseek( fp, FileHeader.bfOffBytes, SEEK_SET );
-		int t;
-		unsigned char *tp;
-		for( t = 0, tp = texture; t < numt; t++ )
-		{
-			for( int s = 0; s < nums; s++, tp += 3 )
-			{
-				*(tp+2) = fgetc( fp );		// b
-				*(tp+1) = fgetc( fp );		// g
-				*(tp+0) = fgetc( fp );		// r
-			}
-
-			for( int e = 0; e < numExtra; e++ )
-			{
-				fgetc( fp );
-			}
-		}
-	}
-
-	// we can also handle 8 bits of indirect color:
-	if( InfoHeader.biBitCount == 8 && InfoHeader.biClrUsed == 256 )
-	{
-		struct rgba32
-		{
-			unsigned char r, g, b, a;
-		};
-		struct rgba32 *colorTable = new struct rgba32[ InfoHeader.biClrUsed ];
-
-		rewind( fp );
-		fseek( fp, sizeof(struct bmfh) + InfoHeader.biSize - 2, SEEK_SET );
-		for( int c = 0; c < InfoHeader.biClrUsed; c++ )
-		{
-			colorTable[c].r = fgetc( fp );
-			colorTable[c].g = fgetc( fp );
-			colorTable[c].b = fgetc( fp );
-			colorTable[c].a = fgetc( fp );
-			if( VERBOSE )	fprintf( stderr, "%4d:\t0x%02x\t0x%02x\t0x%02x\t0x%02x\n",
-				c, colorTable[c].r, colorTable[c].g, colorTable[c].b, colorTable[c].a );
-		}
-
-		rewind( fp );
-		fseek( fp, FileHeader.bfOffBytes, SEEK_SET );
-		int t;
-		unsigned char *tp;
-		for( t = 0, tp = texture; t < numt; t++ )
-		{
-			for( int s = 0; s < nums; s++, tp += 3 )
-			{
-				int index = fgetc( fp );
-				*(tp+0) = colorTable[index].r;	// r
-				*(tp+1) = colorTable[index].g;	// g
-				*(tp+2) = colorTable[index].b;	// b
-			}
-
-			for( int e = 0; e < numExtra; e++ )
-			{
-				fgetc( fp );
-			}
-		}
-
-		delete[ ] colorTable;
-	}
-
-	fclose( fp );
-
-	*width = nums;
-	*height = numt;
-	return texture;
-}
-
 int
 ReadInt( FILE *fp )
 {
@@ -1512,46 +1405,12 @@ HsvRgb( float hsv[3], float rgb[3] )
 	rgb[2] = b;
 }
 
-/*
-void
-Cross(float v1[3], float v2[3], float vout[3])
-{
-	float tmp[3];
-	tmp[0] = v1[1] * v2[2] - v2[1] * v1[2];
-	tmp[1] = v2[0] * v1[2] - v1[0] * v2[2];
-	tmp[2] = v1[0] * v2[1] - v2[0] * v1[1];
-	vout[0] = tmp[0];
-	vout[1] = tmp[1];
-	vout[2] = tmp[2];
-}
-*/
-
 float
 Dot(float v1[3], float v2[3])
 {
 	return v1[0] * v2[0] + v1[1] * v2[1] + v1[2] * v2[2];
 }
-/*
-float
-Unit(float vin[3], float vout[3])
-{
-	float dist = vin[0] * vin[0] + vin[1] * vin[1] + vin[2] * vin[2];
-	if (dist > 0.0)
-	{
-		dist = sqrtf(dist);
-		vout[0] = vin[0] / dist;
-		vout[1] = vin[1] / dist;
-		vout[2] = vin[2] / dist;
-	}
-	else
-	{
-		vout[0] = vin[0];
-		vout[1] = vin[1];
-		vout[2] = vin[2];
-	}
-	return dist;
-}
-*/
+
 // Rotating a point an angle about the x axis around a center
 void
 RotateX(Point* p, float deg, float xc, float yc, float zc)
@@ -1690,6 +1549,7 @@ DrawCircle(GLfloat x, GLfloat y, GLfloat radius, RGB color)
 		}
 	glEnd();
 }
+
 int
 LoadObjFile(char* name)
 {
@@ -2107,4 +1967,350 @@ ReadObjVTN(char* str, int* v, int* t, int* n)
 			sscanf(str, "%d", v);
 		}
 	}
+}
+
+// import textures
+void InitTextures() {
+	int width, height, level, ncomps, border;
+	level = 0;
+	ncomps = 3;
+	border = 0;
+
+	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+
+	glGenTextures(1, &skullTexType);
+	//width = 1024;
+	//height = 512;
+	width = height = 500;
+	unsigned char* Texture1 = BmpToTexture((char*)"skull.bmp", &width, &height);
+
+	glBindTexture(GL_TEXTURE_2D, skullTexType);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+	glTexImage2D(GL_TEXTURE_2D, level, ncomps, width, height, border, GL_RGB, GL_UNSIGNED_BYTE, Texture1);
+
+	/*
+	glGenTextures(1, &eyeStarTexType);
+	width = height = 200;
+	unsigned char* Texture2 = BmpToTexture((char*)"eye_star.bmp", &width, &height);
+
+	glBindTexture(GL_TEXTURE_2D, eyeStarTexType);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+	glTexImage2D(GL_TEXTURE_2D, level, ncomps, width, height, border, GL_RGB, GL_UNSIGNED_BYTE, Texture2);
+
+	glGenTextures(1, &eyeRedTexType);
+	unsigned char* Texture3 = BmpToTexture((char*)"eye_red.bmp", &width, &height);
+
+	glBindTexture(GL_TEXTURE_2D, eyeRedTexType);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+	glTexImage2D(GL_TEXTURE_2D, level, ncomps, width, height, border, GL_RGB, GL_UNSIGNED_BYTE, Texture3);
+	*/
+
+	glMatrixMode(GL_TEXTURE);
+}
+
+// read a BMP file into a Texture:
+unsigned char*
+BmpToTexture(char* filename, int* width, int* height)
+{
+	FILE* fp = fopen(filename, "rb");
+	if (fp == NULL)
+	{
+		fprintf(stderr, "Cannot open Bmp file '%s'\n", filename);
+		return NULL;
+	}
+
+	FileHeader.bfType = ReadShort(fp);
+
+
+	// if bfType is not BMP_MAGIC_NUMBER, the file is not a bmp:
+
+	if (VERBOSE) fprintf(stderr, "FileHeader.bfType = 0x%0x = \"%c%c\"\n",
+		FileHeader.bfType, FileHeader.bfType & 0xff, (FileHeader.bfType >> 8) & 0xff);
+	if (FileHeader.bfType != BMP_MAGIC_NUMBER)
+	{
+		fprintf(stderr, "Wrong type of file: 0x%0x\n", FileHeader.bfType);
+		fclose(fp);
+		return NULL;
+	}
+
+
+	FileHeader.bfSize = ReadInt(fp);
+	if (VERBOSE)	fprintf(stderr, "FileHeader.bfSize = %d\n", FileHeader.bfSize);
+
+	FileHeader.bfReserved1 = ReadShort(fp);
+	FileHeader.bfReserved2 = ReadShort(fp);
+
+	FileHeader.bfOffBytes = ReadInt(fp);
+	if (VERBOSE)	fprintf(stderr, "FileHeader.bfOffBytes = %d\n", FileHeader.bfOffBytes);
+
+
+	InfoHeader.biSize = ReadInt(fp);
+	if (VERBOSE)	fprintf(stderr, "InfoHeader.biSize = %d\n", InfoHeader.biSize);
+	InfoHeader.biWidth = ReadInt(fp);
+	if (VERBOSE)	fprintf(stderr, "InfoHeader.biWidth = %d\n", InfoHeader.biWidth);
+	InfoHeader.biHeight = ReadInt(fp);
+	if (VERBOSE)	fprintf(stderr, "InfoHeader.biHeight = %d\n", InfoHeader.biHeight);
+
+	const int nums = InfoHeader.biWidth;
+	const int numt = InfoHeader.biHeight;
+
+	InfoHeader.biPlanes = ReadShort(fp);
+	if (VERBOSE)	fprintf(stderr, "InfoHeader.biPlanes = %d\n", InfoHeader.biPlanes);
+
+	InfoHeader.biBitCount = ReadShort(fp);
+	if (VERBOSE)	fprintf(stderr, "InfoHeader.biBitCount = %d\n", InfoHeader.biBitCount);
+
+	InfoHeader.biCompression = ReadInt(fp);
+	if (VERBOSE)	fprintf(stderr, "InfoHeader.biCompression = %d\n", InfoHeader.biCompression);
+
+	InfoHeader.biSizeImage = ReadInt(fp);
+	if (VERBOSE)	fprintf(stderr, "InfoHeader.biSizeImage = %d\n", InfoHeader.biSizeImage);
+
+	InfoHeader.biXPixelsPerMeter = ReadInt(fp);
+	InfoHeader.biYPixelsPerMeter = ReadInt(fp);
+
+	InfoHeader.biClrUsed = ReadInt(fp);
+	if (VERBOSE)	fprintf(stderr, "InfoHeader.biClrUsed = %d\n", InfoHeader.biClrUsed);
+
+	InfoHeader.biClrImportant = ReadInt(fp);
+
+
+	// fprintf( stderr, "Image size found: %d x %d\n", ImageWidth, ImageHeight );
+
+
+	// pixels will be stored bottom-to-top, left-to-right:
+	unsigned char* texture = new unsigned char[3 * nums * numt];
+	if (texture == NULL)
+	{
+		fprintf(stderr, "Cannot allocate the texture array!\n");
+		return NULL;
+	}
+
+
+	// extra padding bytes:
+
+	int requiredRowSizeInBytes = 4 * ((InfoHeader.biBitCount * InfoHeader.biWidth + 31) / 32);
+	if (VERBOSE)	fprintf(stderr, "requiredRowSizeInBytes = %d\n", requiredRowSizeInBytes);
+
+	int myRowSizeInBytes = (InfoHeader.biBitCount * InfoHeader.biWidth + 7) / 8;
+	if (VERBOSE)	fprintf(stderr, "myRowSizeInBytes = %d\n", myRowSizeInBytes);
+
+	int oldNumExtra = 4 * (((3 * InfoHeader.biWidth) + 3) / 4) - 3 * InfoHeader.biWidth;
+	if (VERBOSE)	fprintf(stderr, "Old NumExtra padding = %d\n", oldNumExtra);
+
+	int numExtra = requiredRowSizeInBytes - myRowSizeInBytes;
+	if (VERBOSE)	fprintf(stderr, "New NumExtra padding = %d\n", numExtra);
+
+
+	// this function does not support compression:
+
+	if (InfoHeader.biCompression != 0)
+	{
+		fprintf(stderr, "Wrong type of image compression: %d\n", InfoHeader.biCompression);
+		fclose(fp);
+		return NULL;
+	}
+
+
+	// we can handle 24 bits of direct color:
+	if (InfoHeader.biBitCount == 24)
+	{
+		rewind(fp);
+		fseek(fp, FileHeader.bfOffBytes, SEEK_SET);
+		int t;
+		unsigned char* tp;
+		for (t = 0, tp = texture; t < numt; t++)
+		{
+			for (int s = 0; s < nums; s++, tp += 3)
+			{
+				*(tp + 2) = fgetc(fp);		// b
+				*(tp + 1) = fgetc(fp);		// g
+				*(tp + 0) = fgetc(fp);		// r
+			}
+
+			for (int e = 0; e < numExtra; e++)
+			{
+				fgetc(fp);
+			}
+		}
+	}
+
+	// we can also handle 8 bits of indirect color:
+	if (InfoHeader.biBitCount == 8 && InfoHeader.biClrUsed == 256)
+	{
+		struct rgba32
+		{
+			unsigned char r, g, b, a;
+		};
+		struct rgba32* colorTable = new struct rgba32[InfoHeader.biClrUsed];
+
+		rewind(fp);
+		fseek(fp, sizeof(struct bmfh) + InfoHeader.biSize - 2, SEEK_SET);
+		for (int c = 0; c < InfoHeader.biClrUsed; c++)
+		{
+			colorTable[c].r = fgetc(fp);
+			colorTable[c].g = fgetc(fp);
+			colorTable[c].b = fgetc(fp);
+			colorTable[c].a = fgetc(fp);
+			if (VERBOSE)	fprintf(stderr, "%4d:\t0x%02x\t0x%02x\t0x%02x\t0x%02x\n",
+				c, colorTable[c].r, colorTable[c].g, colorTable[c].b, colorTable[c].a);
+		}
+
+		rewind(fp);
+		fseek(fp, FileHeader.bfOffBytes, SEEK_SET);
+		int t;
+		unsigned char* tp;
+		for (t = 0, tp = texture; t < numt; t++)
+		{
+			for (int s = 0; s < nums; s++, tp += 3)
+			{
+				int index = fgetc(fp);
+				*(tp + 0) = colorTable[index].r;	// r
+				*(tp + 1) = colorTable[index].g;	// g
+				*(tp + 2) = colorTable[index].b;	// b
+			}
+
+			for (int e = 0; e < numExtra; e++)
+			{
+				fgetc(fp);
+			}
+		}
+
+		delete[] colorTable;
+	}
+
+	fclose(fp);
+
+	*width = nums;
+	*height = numt;
+	return texture;
+}
+
+inline
+void
+DrawPoint(struct point* p)
+{
+	glNormal3fv(&p->nx);
+	glTexCoord2fv(&p->s);
+	glVertex3fv(&p->x);
+}
+void
+Sphere(float radius, int slices, int stacks, float xpos, float ypos, float zpos)
+{
+	// set the globals:
+
+	NumLngs = SPHERE_SLICES;
+	NumLats = SPHERE_STACKS;
+	if (NumLngs < 3)
+		NumLngs = 3;
+	if (NumLats < 3)
+		NumLats = 3;
+
+	// allocate the point data structure:
+
+	Pts = new struct point[NumLngs * NumLats];
+
+	// fill the Pts structure:
+
+	for (int ilat = 0; ilat < NumLats; ilat++)
+	{
+		float lat = -M_PI / 2. + M_PI * (float)ilat / (float)(NumLats - 1);	// ilat=0/lat=0. is the south pole
+											// ilat=NumLats-1, lat=+M_PI/2. is the north pole
+		float xz = cosf(lat);
+		float  y = sinf(lat) + ypos;
+		for (int ilng = 0; ilng < NumLngs; ilng++)				// ilng=0, lng=-M_PI and
+											// ilng=NumLngs-1, lng=+M_PI are the same meridian
+		{
+			float lng = -M_PI + 2. * M_PI * (float)ilng / (float)(NumLngs - 1);
+			float x = (xz * cosf(lng)) + xpos;
+			float z = (-xz * sinf(lng)) + zpos;
+			struct point* p = PtsPointer(ilat, ilng);
+			p->x = (radius * x);
+			p->y = (radius * y);
+			p->z = (radius * z);
+			p->nx = x;
+			p->ny = y;
+			p->nz = z;
+
+			//if (TurnDistortionOn)
+			//{
+			//	p->s = (lng + cosf(2 * M_PI * (TimeInterval + (float)ilat / (float)NumLats)) + M_PI / 2.) / M_PI;
+			//	p->t = (lat + sinf(2 * M_PI * (TimeInterval + (float)ilng / (float)NumLngs)) + M_PI / 2.) / M_PI;
+			//}
+			//else
+			{
+				p->s = (lng + M_PI) / (2. * M_PI);
+				p->t = (lat + M_PI / 2.) / M_PI;
+			}
+		}
+	}
+
+	struct point top, bot;		// top, bottom points
+
+	top.x = (float)xpos;		top.y = radius + (float)ypos;	top.z = (float)zpos;
+	top.nx = 0.;		top.ny = 1.;		top.nz = 0.;
+	top.s = 0.;		top.t = 1.;
+
+	bot.x = (float)xpos;		bot.y = -radius + (float)ypos;	bot.z = (float)zpos;
+	bot.nx = 0.;		bot.ny = -1.;		bot.nz = 0.;
+	bot.s = 0.;		bot.t = 0.;
+
+	// connect the north pole to the latitude NumLats-2:
+
+	glBegin(GL_TRIANGLE_STRIP);
+	for (int ilng = 0; ilng < NumLngs; ilng++)
+	{
+		float lng = -M_PI + 2. * M_PI * (float)ilng / (float)(NumLngs - 1);
+		top.s = (lng + M_PI) / (2. * M_PI);
+		DrawPoint(&top);
+		struct point* p = PtsPointer(NumLats - 2, ilng);	// ilat=NumLats-1 is the north pole
+		DrawPoint(p);
+	}
+	glEnd();
+
+	// connect the south pole to the latitude 1:
+
+	glBegin(GL_TRIANGLE_STRIP);
+	for (int ilng = NumLngs - 1; ilng >= 0; ilng--)
+	{
+		float lng = -M_PI + 2. * M_PI * (float)ilng / (float)(NumLngs - 1);
+		bot.s = (lng + M_PI) / (2. * M_PI);
+		DrawPoint(&bot);
+		struct point* p = PtsPointer(1, ilng);					// ilat=0 is the south pole
+		DrawPoint(p);
+	}
+	glEnd();
+
+	// connect the horizontal strips:
+
+	for (int ilat = 2; ilat < NumLats - 1; ilat++)
+	{
+		struct point* p;
+		glBegin(GL_TRIANGLE_STRIP);
+		for (int ilng = 0; ilng < NumLngs; ilng++)
+		{
+			p = PtsPointer(ilat, ilng);
+			DrawPoint(p);
+			p = PtsPointer(ilat - 1, ilng);
+			DrawPoint(p);
+		}
+		glEnd();
+	}
+
+	// clean-up:
+
+	delete[] Pts;
+	Pts = NULL;
 }

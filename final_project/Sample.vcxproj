@@ -125,6 +125,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="glslprogram.cpp" />
     <ClCompile Include="sample.cpp">
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Disabled</Optimization>
       <PreprocessorDefinitions Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">%(PreprocessorDefinitions)</PreprocessorDefinitions>
@@ -134,13 +135,23 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <Image Include="eye_red.bmp" />
+    <Image Include="eye_star.bmp" />
     <Image Include="skull.jpg" />
+    <Image Include="worldtex.bmp" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="pattern.frag" />
+    <None Include="pattern.vert" />
     <None Include="skull.mtl" />
   </ItemGroup>
   <ItemGroup>
-    <Object Include="skull.obj" />
+    <Object Include="skull.obj">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
+    </Object>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="glslprogram.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
