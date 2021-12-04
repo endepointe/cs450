@@ -1,0 +1,8 @@
+
+Fragment shader failed to compile with the following errors:
+ERROR: 0:22: error(#143) Undeclared identifier: vST
+ERROR: 0:25: error(#143) Undeclared identifier: Resolution
+ERROR: 0:25: error(#216) Vector field selection out of range "y"
+ERROR: error(#273) 3 compilation errors.  No code generated
+
+

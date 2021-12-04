@@ -511,6 +511,25 @@ Display( )
 	}
 #endif
 
+	glEnable(GL_TEXTURE_2D);
+	glBindTexture(GL_TEXTURE_2D, skullTexType);
+	glCallList(SkullList);
+
+	//glDisable(GL_TEXTURE_2D);
+
+	glBindTexture(GL_TEXTURE_2D, eyeRedTexType);
+	//glRotatef(-90.,0,0,1);
+	glCallList(LeftEyeList);
+
+	glBindTexture(GL_TEXTURE_2D, eyeStarTexType);
+	glCallList(RightEyeList);
+
+	glDisable(GL_TEXTURE_2D);
+
+	Pattern->Use();
+	Pattern->SetUniformVariable("fTime", Time);
+	Pattern->SetUniformVariable("vTime", Time);
+
 	/*
 	srand((unsigned)time(NULL));
 
@@ -523,6 +542,7 @@ Display( )
 			rgb.b = ((float)rand() / (RAND_MAX)); 
 			rgb.g = ((float)rand() / (RAND_MAX));
       Curve curve;
+			//-2.2, -5.4, 7.2
       curve.p0.x0 = 0.;
       curve.p0.y0 = 1.;
       curve.p0.z0 = 0.; 
@@ -548,24 +568,6 @@ Display( )
     }
 	glPopMatrix();
 	*/
-
-	glEnable(GL_TEXTURE_2D);
-	glBindTexture(GL_TEXTURE_2D, skullTexType);
-	glCallList(SkullList);
-
-	glDisable(GL_TEXTURE_2D);
-
-	//glBindTexture(GL_TEXTURE_2D, eyeRedTexType);
-	//glRotatef(-90.,0,0,1);
-	glCallList(LeftEyeList);
-
-	//glBindTexture(GL_TEXTURE_2D, eyeStarTexType);
-	Pattern->Use();
-	Pattern->SetUniformVariable("fTime", Time);
-	Pattern->SetUniformVariable("vTime", Time);
-	glCallList(RightEyeList);
-
-	//glDisable(GL_TEXTURE_2D);
 
 	// swap the double-buffered framebuffers:
 	glutSwapBuffers( );
@@ -926,13 +928,13 @@ InitLists( )
 
 	LeftEyeList = glGenLists(1);
 	glNewList(LeftEyeList, GL_COMPILE);
-		glColor3f(0.8,0.8,0.8);
+		//glColor3f(0.8,0.8,0.8);
 		Sphere(2., SPHERE_SLICES, SPHERE_STACKS, -2.2, -5.4, 7.2);
 	glEndList();
 
 	RightEyeList = glGenLists(1);
 	glNewList(RightEyeList, GL_COMPILE);
-		glColor3f(0.8,0.8,0.8);
+		//glColor3f(0.8,0.8,0.8);
 		Sphere(2., SPHERE_SLICES, SPHERE_STACKS, 2.2, -5.4, 7.2);
 	glEndList();
 
@@ -1992,7 +1994,7 @@ void InitTextures() {
 	glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
 	glTexImage2D(GL_TEXTURE_2D, level, ncomps, width, height, border, GL_RGB, GL_UNSIGNED_BYTE, Texture1);
 
-	/*
+	///*
 	glGenTextures(1, &eyeStarTexType);
 	width = height = 200;
 	unsigned char* Texture2 = BmpToTexture((char*)"eye_star.bmp", &width, &height);
@@ -2015,7 +2017,7 @@ void InitTextures() {
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
 	glTexImage2D(GL_TEXTURE_2D, level, ncomps, width, height, border, GL_RGB, GL_UNSIGNED_BYTE, Texture3);
-	*/
+	//*/
 
 	glMatrixMode(GL_TEXTURE);
 }
